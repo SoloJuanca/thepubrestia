@@ -1,0 +1,909 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserType {
+  EMPLOYEE
+  CUSTOMER
+}
+
+enum RoleCode {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  WAITER
+  CASHIER
+  KITCHEN
+  INVENTORY
+}
+
+enum UnitType {
+  KG
+  G
+  L
+  ML
+  UNIT
+  BOX
+  PACK
+}
+
+enum MovementType {
+  PURCHASE
+  SALE_CONSUMPTION
+  WASTE
+  ADJUSTMENT
+  RETURN
+  TRANSFER
+}
+
+enum ReferenceType {
+  ORDER
+  PURCHASE_ORDER
+  WASTE
+  ADJUSTMENT
+  TRANSFER
+  MANUAL
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  CLEANING
+}
+
+enum OrderStatus {
+  OPEN
+  SENT_TO_KITCHEN
+  PREPARING
+  READY
+  DELIVERED
+  CLOSED
+  CANCELLED
+}
+
+enum CheckStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum PromotionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_PRODUCT
+  SPECIAL_PRICE
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+}
+
+enum WasteReason {
+  DAMAGED
+  EXPIRED
+  KITCHEN_ERROR
+  COMP
+  INTERNAL
+  OTHER
+}
+
+enum ExpenseRecurrence {
+  NONE
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+// ─── Auth.js models ──────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  type          UserType  @default(EMPLOYEE)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  roles            UserRole[]
+  employeeProfile  EmployeeProfile?
+  customerProfile  CustomerProfile?
+  auditLogs        AuditLog[]
+  inventoryMoves   InventoryMovement[] @relation("MovementEmployee")
+  ordersAsWaiter   Order[]             @relation("OrderWaiter")
+  payments         Payment[]
+  wasteRecords     WasteRecord[]
+  dailyCloses      DailyClose[]
+  reviewsAsWaiter  Review[]            @relation("ReviewWaiter")
+  assignedPromos   CustomerPromotion[] @relation("PromoAssignedBy")
+
+  @@index([type])
+  @@index([active])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── RBAC ────────────────────────────────────────────────────────────────────
+
+model Role {
+  id          String   @id @default(cuid())
+  code        RoleCode @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String
+  action      String
+  description String?
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@unique([resource, action])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+// ─── Location & profiles ─────────────────────────────────────────────────────
+
+model Location {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  timezone  String   @default("America/Mexico_City")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees          EmployeeProfile[]
+  menuCategories     MenuCategory[]
+  menuItems          MenuItem[]
+  ingredients        Ingredient[]
+  tables             RestaurantTable[]
+  orders             Order[]
+  suppliers          Supplier[]
+  purchaseOrders     PurchaseOrder[]
+  expenses           Expense[]
+  payrollEntries     PayrollEntry[]
+  dailyCloses        DailyClose[]
+  promotions         Promotion[]
+  inventoryMovements InventoryMovement[]
+  wasteRecords       WasteRecord[]
+  reviews            Review[]
+}
+
+model EmployeeProfile {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  locationId String
+  phone      String?
+  hireDate   DateTime?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location       Location       @relation(fields: [locationId], references: [id])
+  payrollEntries PayrollEntry[]
+
+  @@index([locationId])
+  @@index([active])
+}
+
+model CustomerProfile {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  phone         String?
+  visits        Int       @default(0)
+  lifetimeSpend Decimal   @default(0) @db.Decimal(12, 2)
+  lastVisitAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checks     Check[]
+  promotions CustomerPromotion[]
+  reviews    Review[]
+}
+
+// ─── Menu ────────────────────────────────────────────────────────────────────
+
+model MenuCategory {
+  id          String   @id @default(cuid())
+  locationId  String
+  name        String
+  description String?
+  imageUrl    String?
+  imagePath   String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  location   Location             @relation(fields: [locationId], references: [id])
+  items      MenuItem[]
+  promotions PromotionCategory[]
+
+  @@index([locationId, active])
+  @@index([sortOrder])
+}
+
+model MenuItem {
+  id                 String   @id @default(cuid())
+  locationId         String
+  categoryId         String
+  name               String
+  description        String?
+  sku                String?
+  price              Decimal  @db.Decimal(12, 2)
+  estimatedCost      Decimal? @db.Decimal(12, 2)
+  taxRate            Decimal  @default(0) @db.Decimal(5, 4)
+  imageUrl           String?
+  imagePath          String?
+  available          Boolean  @default(true)
+  requiresPrep       Boolean  @default(true)
+  estimatedPrepMins  Int?
+  tags               String[] @default([])
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  location        Location           @relation(fields: [locationId], references: [id])
+  category        MenuCategory       @relation(fields: [categoryId], references: [id])
+  modifierGroups  ModifierGroup[]
+  recipeItems     RecipeItem[]
+  orderItems      OrderItem[]
+  promotions      PromotionProduct[]
+
+  @@unique([locationId, sku])
+  @@index([locationId, active, available])
+  @@index([categoryId])
+}
+
+model ModifierGroup {
+  id            String  @id @default(cuid())
+  menuItemId    String
+  name          String
+  required      Boolean @default(false)
+  minSelections Int     @default(0)
+  maxSelections Int     @default(1)
+  sortOrder     Int     @default(0)
+
+  menuItem MenuItem         @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  options  ModifierOption[]
+
+  @@index([menuItemId])
+}
+
+model ModifierOption {
+  id              String  @id @default(cuid())
+  modifierGroupId String
+  name            String
+  priceDelta      Decimal @default(0) @db.Decimal(12, 2)
+  active          Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  group              ModifierGroup      @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  orderItemModifiers OrderItemModifier[]
+
+  @@index([modifierGroupId])
+}
+
+// ─── Inventory ───────────────────────────────────────────────────────────────
+
+model Ingredient {
+  id                 String   @id @default(cuid())
+  locationId         String
+  name               String
+  category           String?
+  baseUnit           UnitType
+  currentStock       Decimal  @default(0) @db.Decimal(14, 4)
+  minimumStock       Decimal  @default(0) @db.Decimal(14, 4)
+  targetStock        Decimal? @db.Decimal(14, 4)
+  averageCost        Decimal  @default(0) @db.Decimal(12, 4)
+  preferredSupplierId String?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  location          Location            @relation(fields: [locationId], references: [id])
+  preferredSupplier Supplier?           @relation("PreferredSupplier", fields: [preferredSupplierId], references: [id])
+  recipeItems       RecipeItem[]
+  movements         InventoryMovement[]
+  supplierProducts  SupplierProduct[]
+  purchaseItems     PurchaseOrderItem[]
+  wasteRecords      WasteRecord[]
+
+  @@index([locationId, active])
+  @@index([preferredSupplierId])
+}
+
+model RecipeItem {
+  id          String   @id @default(cuid())
+  menuItemId  String
+  ingredientId String
+  quantity    Decimal  @db.Decimal(14, 4)
+  unit        UnitType
+
+  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([menuItemId, ingredientId])
+  @@index([ingredientId])
+}
+
+model InventoryMovement {
+  id             String        @id @default(cuid())
+  locationId     String
+  ingredientId   String
+  quantity       Decimal       @db.Decimal(14, 4)
+  movementType   MovementType
+  referenceType  ReferenceType
+  referenceId    String?
+  previousStock  Decimal       @db.Decimal(14, 4)
+  resultingStock Decimal       @db.Decimal(14, 4)
+  unitCost       Decimal?      @db.Decimal(12, 4)
+  notes          String?
+  employeeId     String?
+  createdAt      DateTime      @default(now())
+
+  location   Location   @relation(fields: [locationId], references: [id])
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+  employee   User?      @relation("MovementEmployee", fields: [employeeId], references: [id])
+
+  @@index([locationId, createdAt])
+  @@index([ingredientId, createdAt])
+  @@index([referenceType, referenceId])
+  @@index([movementType])
+}
+
+model WasteRecord {
+  id           String      @id @default(cuid())
+  locationId   String
+  ingredientId String
+  quantity     Decimal     @db.Decimal(14, 4)
+  unit         UnitType
+  reason       WasteReason
+  comment      String?
+  employeeId   String
+  movementId   String?     @unique
+  createdAt    DateTime    @default(now())
+
+  location   Location   @relation(fields: [locationId], references: [id])
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+  employee   User       @relation(fields: [employeeId], references: [id])
+
+  @@index([locationId, createdAt])
+}
+
+// ─── Suppliers & purchasing ──────────────────────────────────────────────────
+
+model Supplier {
+  id        String   @id @default(cuid())
+  locationId String
+  name      String
+  contact   String?
+  phone     String?
+  whatsapp  String?
+  email     String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  location           Location          @relation(fields: [locationId], references: [id])
+  products           SupplierProduct[]
+  schedules          SupplierSchedule[]
+  purchaseOrders     PurchaseOrder[]
+  preferredFor       Ingredient[]      @relation("PreferredSupplier")
+  expenses           Expense[]
+
+  @@index([locationId, active])
+}
+
+model SupplierProduct {
+  id           String   @id @default(cuid())
+  supplierId   String
+  ingredientId String
+  supplierSku  String?
+  unit         UnitType
+  unitCost     Decimal  @db.Decimal(12, 4)
+  minOrderQty  Decimal? @db.Decimal(14, 4)
+  active       Boolean  @default(true)
+
+  supplier   Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([supplierId, ingredientId])
+}
+
+model SupplierSchedule {
+  id           String  @id @default(cuid())
+  supplierId   String
+  orderDay     Weekday
+  deliveryDay  Weekday
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, orderDay, deliveryDay])
+}
+
+model PurchaseOrder {
+  id               String              @id @default(cuid())
+  locationId       String
+  supplierId       String
+  status           PurchaseOrderStatus @default(DRAFT)
+  orderedAt        DateTime?
+  expectedDelivery DateTime?
+  receivedAt       DateTime?
+  notes            String?
+  createdById      String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  location Location            @relation(fields: [locationId], references: [id])
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+
+  @@index([locationId, status])
+  @@index([supplierId])
+}
+
+model PurchaseOrderItem {
+  id            String  @id @default(cuid())
+  purchaseOrderId String
+  ingredientId  String
+  quantityOrdered Decimal @db.Decimal(14, 4)
+  quantityReceived Decimal @default(0) @db.Decimal(14, 4)
+  unit          UnitType
+  expectedUnitCost Decimal @db.Decimal(12, 4)
+  actualUnitCost   Decimal? @db.Decimal(12, 4)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  ingredient    Ingredient    @relation(fields: [ingredientId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([ingredientId])
+}
+
+// ─── POS: tables, orders, checks ─────────────────────────────────────────────
+
+model RestaurantTable {
+  id         String      @id @default(cuid())
+  locationId String
+  name       String
+  capacity   Int         @default(4)
+  status     TableStatus @default(AVAILABLE)
+  sortOrder  Int         @default(0)
+  active     Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id])
+  orders   Order[]
+  reviews  Review[]
+
+  @@unique([locationId, name])
+  @@index([locationId, status])
+}
+
+model Order {
+  id                  String      @id @default(cuid())
+  locationId          String
+  tableId             String?
+  waiterId            String?
+  status              OrderStatus @default(OPEN)
+  ticketNumber        Int?
+  openedAt            DateTime    @default(now())
+  closedAt            DateTime?
+  cancelledAt         DateTime?
+  notes               String?
+  inventoryConsumedAt DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  location     Location      @relation(fields: [locationId], references: [id])
+  table        RestaurantTable? @relation(fields: [tableId], references: [id])
+  waiter       User?         @relation("OrderWaiter", fields: [waiterId], references: [id])
+  checks       Check[]
+  reviewTokens ReviewToken[]
+  reviews      Review[]
+
+  @@index([locationId, status])
+  @@index([tableId])
+  @@index([waiterId])
+  @@index([openedAt])
+  @@index([inventoryConsumedAt])
+}
+
+model Check {
+  id             String      @id @default(cuid())
+  orderId        String
+  customerId     String?
+  name           String      @default("General")
+  status         CheckStatus @default(OPEN)
+  subtotal       Decimal     @default(0) @db.Decimal(12, 2)
+  discountTotal  Decimal     @default(0) @db.Decimal(12, 2)
+  taxTotal       Decimal     @default(0) @db.Decimal(12, 2)
+  tipTotal       Decimal     @default(0) @db.Decimal(12, 2)
+  total          Decimal     @default(0) @db.Decimal(12, 2)
+  promotionId    String?
+  closedAt       DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer   CustomerProfile? @relation(fields: [customerId], references: [id])
+  promotion  Promotion?  @relation(fields: [promotionId], references: [id])
+  items      OrderItem[]
+  payments   Payment[]
+
+  @@index([orderId, status])
+  @@index([customerId])
+}
+
+model OrderItem {
+  id              String      @id @default(cuid())
+  checkId         String
+  menuItemId      String?
+  nameSnapshot    String
+  unitPrice       Decimal     @db.Decimal(12, 2)
+  quantity        Int         @default(1)
+  modifiersTotal  Decimal     @default(0) @db.Decimal(12, 2)
+  discountAmount  Decimal     @default(0) @db.Decimal(12, 2)
+  taxAmount       Decimal     @default(0) @db.Decimal(12, 2)
+  lineTotal       Decimal     @db.Decimal(12, 2)
+  status          OrderStatus @default(OPEN)
+  notes           String?
+  sentToKitchenAt DateTime?
+  readyAt         DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  check     Check               @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  menuItem  MenuItem?           @relation(fields: [menuItemId], references: [id])
+  modifiers OrderItemModifier[]
+
+  @@index([checkId])
+  @@index([menuItemId])
+  @@index([status])
+}
+
+model OrderItemModifier {
+  id                 String  @id @default(cuid())
+  orderItemId        String
+  modifierOptionId   String?
+  nameSnapshot       String
+  priceDeltaSnapshot Decimal @default(0) @db.Decimal(12, 2)
+
+  orderItem      OrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifierOption ModifierOption? @relation(fields: [modifierOptionId], references: [id])
+
+  @@index([orderItemId])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  checkId   String
+  method    PaymentMethod
+  amount    Decimal       @db.Decimal(12, 2)
+  tipAmount Decimal       @default(0) @db.Decimal(12, 2)
+  reference String?
+  paidById  String?
+  paidAt    DateTime      @default(now())
+  createdAt DateTime      @default(now())
+
+  check  Check @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  paidBy User? @relation(fields: [paidById], references: [id])
+
+  @@index([checkId])
+  @@index([paidAt])
+}
+
+// ─── Promotions ──────────────────────────────────────────────────────────────
+
+model Promotion {
+  id              String        @id @default(cuid())
+  locationId      String
+  name            String
+  description     String?
+  code            String
+  type            PromotionType
+  amount          Decimal       @db.Decimal(12, 2)
+  startsAt        DateTime
+  endsAt          DateTime?
+  active          Boolean       @default(true)
+  totalLimit      Int?
+  perCustomerLimit Int?
+  stackable       Boolean       @default(false)
+  appliesToEntireCheck Boolean  @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  location   Location             @relation(fields: [locationId], references: [id])
+  products   PromotionProduct[]
+  categories PromotionCategory[]
+  customers  CustomerPromotion[]
+  checks     Check[]
+
+  @@unique([locationId, code])
+  @@index([locationId, active])
+  @@index([startsAt, endsAt])
+}
+
+model PromotionProduct {
+  promotionId String
+  menuItemId  String
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  menuItem  MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, menuItemId])
+}
+
+model PromotionCategory {
+  promotionId String
+  categoryId  String
+
+  promotion Promotion    @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  category  MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([promotionId, categoryId])
+}
+
+model CustomerPromotion {
+  id           String    @id @default(cuid())
+  customerId   String
+  promotionId  String
+  assignedAt   DateTime  @default(now())
+  expiresAt    DateTime?
+  used         Boolean   @default(false)
+  usedAt       DateTime?
+  assignedById String?
+
+  customer   CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  promotion  Promotion       @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  assignedBy User?           @relation("PromoAssignedBy", fields: [assignedById], references: [id])
+
+  @@index([customerId, used])
+  @@index([promotionId])
+}
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+model ReviewToken {
+  id        String    @id @default(cuid())
+  token     String    @unique @default(cuid())
+  orderId   String?
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  order   Order?  @relation(fields: [orderId], references: [id])
+  reviews Review[]
+
+  @@index([expiresAt])
+}
+
+model Review {
+  id             String   @id @default(cuid())
+  locationId     String
+  orderId        String?
+  tableId        String?
+  customerId     String?
+  waiterId       String?
+  reviewTokenId  String?
+  overallRating  Int
+  foodRating     Int?
+  serviceRating  Int?
+  ambienceRating Int?
+  comment        String?
+  guestName      String?
+  guestEmail     String?
+  createdAt      DateTime @default(now())
+
+  location    Location         @relation(fields: [locationId], references: [id])
+  order       Order?           @relation(fields: [orderId], references: [id])
+  table       RestaurantTable? @relation(fields: [tableId], references: [id])
+  customer    CustomerProfile? @relation(fields: [customerId], references: [id])
+  waiter      User?            @relation("ReviewWaiter", fields: [waiterId], references: [id])
+  reviewToken ReviewToken?     @relation(fields: [reviewTokenId], references: [id])
+
+  @@index([locationId, createdAt])
+  @@index([waiterId])
+  @@index([overallRating])
+}
+
+// ─── Finance & ops ───────────────────────────────────────────────────────────
+
+model Expense {
+  id           String            @id @default(cuid())
+  locationId   String
+  category     String
+  concept      String
+  supplierId   String?
+  amount       Decimal           @db.Decimal(12, 2)
+  expenseDate  DateTime
+  recurrence   ExpenseRecurrence @default(NONE)
+  receiptUrl   String?
+  receiptPath  String?
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+
+  @@index([locationId, expenseDate])
+  @@index([category])
+}
+
+model PayrollEntry {
+  id           String        @id @default(cuid())
+  locationId   String
+  employeeId   String
+  periodStart  DateTime
+  periodEnd    DateTime
+  baseSalary   Decimal       @db.Decimal(12, 2)
+  hours        Decimal?      @db.Decimal(8, 2)
+  bonuses      Decimal       @default(0) @db.Decimal(12, 2)
+  deductions   Decimal       @default(0) @db.Decimal(12, 2)
+  totalCost    Decimal       @db.Decimal(12, 2)
+  notes        String?
+  paidAt       DateTime?
+  status       PayrollStatus @default(DRAFT)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  location Location        @relation(fields: [locationId], references: [id])
+  employee EmployeeProfile @relation(fields: [employeeId], references: [id])
+
+  @@index([locationId, periodStart])
+  @@index([employeeId])
+}
+
+model DailyClose {
+  id                String   @id @default(cuid())
+  locationId        String
+  businessDate      DateTime @db.Date
+  closedById        String
+  salesTotal        Decimal  @default(0) @db.Decimal(12, 2)
+  cashExpected      Decimal  @default(0) @db.Decimal(12, 2)
+  cardTotal         Decimal  @default(0) @db.Decimal(12, 2)
+  transferTotal     Decimal  @default(0) @db.Decimal(12, 2)
+  tipsTotal         Decimal  @default(0) @db.Decimal(12, 2)
+  discountsTotal    Decimal  @default(0) @db.Decimal(12, 2)
+  cancellationsTotal Decimal @default(0) @db.Decimal(12, 2)
+  wasteTotal        Decimal  @default(0) @db.Decimal(12, 2)
+  orderCount        Int      @default(0)
+  notes             String?
+  closedAt          DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id])
+  closedBy User     @relation(fields: [closedById], references: [id])
+
+  @@unique([locationId, businessDate])
+  @@index([closedAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entity     String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
