@@ -4,13 +4,16 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { assertPermission, AuthorizationError } from "@/lib/rbac";
+import { employeeOpsService } from "@/services/employee-ops.service";
 import {
   createEmployeeSchema,
   updateEmployeeSchema,
+  upsertCompensationSchema,
+  upsertScheduleSchema,
 } from "@/validations/employee";
 
 export type ActionResult =
-  | { ok: true; message?: string }
+  | { ok: true; message?: string; id?: string }
   | { ok: false; error: string };
 
 export async function createEmployeeAction(
@@ -39,7 +42,7 @@ export async function createEmployeeAction(
 
     const passwordHash = await bcrypt.hash(data.password, 12);
 
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         email: data.email.toLowerCase(),
         name: data.name,
@@ -51,23 +54,48 @@ export async function createEmployeeAction(
           create: {
             locationId: data.locationId,
             phone: data.phone,
-            hireDate: new Date(),
+            jobTitle: data.jobTitle ?? null,
+            hireDate: data.hireDate ? new Date(data.hireDate) : new Date(),
             active: true,
           },
         },
       },
+      include: { employeeProfile: true },
     });
+
+    const profileId = user.employeeProfile!.id;
+
+    if (data.schedule?.length) {
+      await employeeOpsService.upsertSchedule(profileId, data.schedule);
+    } else {
+      await employeeOpsService.upsertSchedule(
+        profileId,
+        employeeOpsService.defaultSchedule(),
+      );
+    }
+
+    if (data.compensation) {
+      await employeeOpsService.upsertCompensation({
+        employeeId: profileId,
+        type: data.compensation.type,
+        amount: data.compensation.amount,
+        bonuses: data.compensation.bonuses,
+        tipsNotes: data.compensation.tipsNotes,
+        notes: data.compensation.notes,
+      });
+    }
 
     await prisma.auditLog.create({
       data: {
         action: "EMPLOYEE_CREATE",
         entity: "User",
+        entityId: user.id,
         after: { email: data.email, role: data.roleCode },
       },
     });
 
     revalidatePath("/employees");
-    return { ok: true, message: "Empleado creado." };
+    return { ok: true, message: "Empleado creado.", id: user.id };
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return { ok: false, error: error.message };
@@ -107,6 +135,8 @@ export async function updateEmployeeAction(
           data: {
             phone: data.phone === undefined ? undefined : data.phone,
             active: data.active ?? undefined,
+            jobTitle:
+              data.jobTitle === undefined ? undefined : data.jobTitle,
           },
         });
       }
@@ -134,6 +164,7 @@ export async function updateEmployeeAction(
     });
 
     revalidatePath("/employees");
+    revalidatePath(`/employees/${data.id}`);
     return { ok: true, message: "Empleado actualizado." };
   } catch (error) {
     if (error instanceof AuthorizationError) {
@@ -141,6 +172,56 @@ export async function updateEmployeeAction(
     }
     console.error(error);
     return { ok: false, error: "No se pudo actualizar el empleado." };
+  }
+}
+
+export async function upsertEmployeeScheduleAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    await assertPermission("employees", "update");
+    const data = upsertScheduleSchema.parse(raw);
+    await employeeOpsService.upsertSchedule(data.employeeProfileId, data.days);
+    const profile = await prisma.employeeProfile.findUnique({
+      where: { id: data.employeeProfileId },
+    });
+    if (profile) revalidatePath(`/employees/${profile.userId}`);
+    revalidatePath("/employees");
+    return { ok: true, message: "Horario guardado." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    console.error(error);
+    return { ok: false, error: "No se pudo guardar el horario." };
+  }
+}
+
+export async function upsertEmployeeCompensationAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    await assertPermission("employees", "update");
+    const data = upsertCompensationSchema.parse(raw);
+    await employeeOpsService.upsertCompensation({
+      employeeId: data.employeeProfileId,
+      type: data.type,
+      amount: data.amount,
+      bonuses: data.bonuses,
+      tipsNotes: data.tipsNotes,
+      notes: data.notes,
+    });
+    const profile = await prisma.employeeProfile.findUnique({
+      where: { id: data.employeeProfileId },
+    });
+    if (profile) revalidatePath(`/employees/${profile.userId}`);
+    return { ok: true, message: "Compensación guardada." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    console.error(error);
+    return { ok: false, error: "No se pudo guardar la compensación." };
   }
 }
 

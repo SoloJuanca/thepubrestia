@@ -612,6 +612,80 @@ async function main() {
     }
   }
 
+  // Sample expense + review for demos
+  const expenseExists = await prisma.expense.findFirst({
+    where: { locationId: location.id, concept: "Renta local demo" },
+  });
+  if (!expenseExists) {
+    await prisma.expense.create({
+      data: {
+        locationId: location.id,
+        category: "Renta",
+        concept: "Renta local demo",
+        amount: 25000,
+        expenseDate: new Date(),
+        recurrence: "MONTHLY",
+        notes: "Seed Fase 9",
+      },
+    });
+  }
+
+  const reviewCount = await prisma.review.count({
+    where: { locationId: location.id },
+  });
+  if (reviewCount === 0) {
+    await prisma.review.create({
+      data: {
+        locationId: location.id,
+        overallRating: 5,
+        foodRating: 5,
+        serviceRating: 4,
+        ambienceRating: 5,
+        comment: "Excelente ambiente y hamburguesas.",
+        guestName: "Cliente demo",
+      },
+    });
+  }
+
+  const serviceCount = await prisma.service.count({
+    where: { locationId: location.id },
+  });
+  if (serviceCount === 0) {
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+
+    await prisma.service.createMany({
+      data: [
+        {
+          locationId: location.id,
+          name: "Fumigación general",
+          description: "Control de plagas en cocina y almacén",
+          category: "Mantenimiento",
+          expectedCost: 1800,
+          recurrenceType: "MONTHLY",
+          recurrenceInterval: 1,
+          nextServiceDate: nextMonth,
+          reminderDaysBefore: 7,
+          notes: "Seed demo",
+        },
+        {
+          locationId: location.id,
+          name: "Revisión de extractores",
+          description: "Limpieza y revisión de campanas",
+          category: "Mantenimiento",
+          expectedCost: 2500,
+          recurrenceType: "QUARTERLY",
+          recurrenceInterval: 1,
+          nextServiceDate: nextWeek,
+          reminderDaysBefore: 14,
+          notes: "Seed demo",
+        },
+      ],
+    });
+  }
+
   console.log("Seed complete.");
   console.log(`Demo password for all employees: ${DEMO_PASSWORD}`);
   console.log("Accounts: superadmin@thepub.local, admin@thepub.local, waiter@thepub.local, ...");

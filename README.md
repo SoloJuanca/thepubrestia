@@ -2,7 +2,7 @@
 
 Sistema de gestión integral (POS, inventario, compras, clientes, finanzas) para **The Pub GameStore**.
 
-## Fase 1 — Foundation (actual)
+## Fase 1 — Foundation
 
 - Next.js App Router + TypeScript + Tailwind + shadcn/ui
 - PostgreSQL + Prisma (esquema completo de dominio)
@@ -12,6 +12,76 @@ Sistema de gestión integral (POS, inventario, compras, clientes, finanzas) para
 - Dashboard operativo mínimo (datos reales de mesas/stock/reseñas)
 - CRUD ligero de empleados
 - Seed demo
+
+## Fase 2 — Menú
+
+- CRUD categorías (orden, imagen, activo)
+- CRUD productos (precio, impuestos, SKU, disponibilidad, tags)
+- Modificadores por producto (grupos + opciones con precio)
+- Imágenes vía `StorageService` → Vercel Blob (`BLOB_READ_WRITE_TOKEN`) o URL manual
+- Auditoría de altas/cambios de precio
+- Recetas se muestran en detalle (edición de insumos en Fase 3)
+
+## Fase 3 — Inventario
+
+- CRUD ingredientes (unidad, mínimos, objetivo, costo, proveedor)
+- Recetas producto ↔ insumos
+- Ajustes y mermas con `InventoryMovement` (nunca stock silencioso)
+- Alertas: por agotarse, agotados, pedido sugerido, POs pendientes
+- Listado de movimientos auditados
+
+## Fase 4 — POS
+
+- Grid de mesas (tablet) con estados y totales
+- Sesión por mesa: cuentas múltiples, menú, modificadores
+- Envío a cocina y cola de cocina (preparar / listo / entregado)
+- División: mover productos, partes iguales, montos personalizados
+- Listado de órdenes abiertas
+
+## Fase 5 — Cobros
+
+- Cobro multi-método (efectivo / tarjeta / transferencia) + propinas
+- Cierre de cuenta con `FOR UPDATE` (sin doble cobro)
+- Consumo de inventario por receta (`SALE_CONSUMPTION`, idempotente por ítem)
+- Ticket imprimible 58/80 mm (`PrinterService` → `window.print`)
+- Cierre de día (preview + confirmación inmutable)
+
+## Fase 6 — Proveedores
+
+- CRUD proveedores (contacto, WhatsApp, notas, activo)
+- Calendarios pedido/entrega + “pedidos de hoy”
+- Catálogo proveedor ↔ insumos (SKU, costo, mín. pedido)
+- Órdenes de compra (borrador → pendiente → pedida → parcial/recibida)
+- Recepción parcial/total → `PURCHASE` + costo promedio ponderado
+- Borradores sugeridos desde stock bajo
+
+## Fase 7 — Clientes
+
+- Perfil cliente (email, visitas, lifetime spend, wallet)
+- Asignación de promociones al wallet
+- CRUD promociones (código, vigencia, límites)
+- Aplicar / quitar promo en POS; pricing vía `PromotionService`
+- Métricas de cliente al cerrar cuenta
+
+## Fase 8 — Reseñas
+
+- Token opaco QR (`/review/[token]`) sin exponer orderId
+- Formulario público + dashboard de promedios
+- Generación de enlace desde Reseñas o ticket
+
+## Fase 9 — Finanzas
+
+- Gastos + nómina (borrador → aprobada → pagada)
+- COGS desde movimientos `SALE_CONSUMPTION`
+- Márgenes bruto/operativo, valor de inventario
+- Reportes por rango de fechas (`/reports`)
+- `/finance` restringido a SUPER_ADMIN / ADMIN (middleware)
+
+## Fase 10 — QA
+
+- Tests críticos (pricing, ventana de promo, RBAC finance)
+- `npm test` (Vitest)
+- Settings de sucursal (lectura)
 
 ## Requisitos
 
@@ -78,6 +148,7 @@ Contraseña para todos los empleados: `Password123!`
 | `npm run dev` | Servidor de desarrollo |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript |
+| `npm test` | Tests críticos (Vitest) |
 | `npm run db:migrate` | Migraciones (dev) |
 | `npm run db:seed` | Seed |
 | `npm run db:studio` | Prisma Studio |
@@ -104,4 +175,4 @@ prisma/          # Schema, migrations, seed
 
 ## Próximas fases
 
-2 Menú → 3 Inventario → 4 POS → 5 Cobros → 6 Proveedores → 7 Clientes → 8 Reseñas → 9 Finanzas → 10 QA
+Roadmap base completado (fases 1–10). Iteraciones futuras: magic link cliente, export CSV/PDF, ESC/POS hardware.

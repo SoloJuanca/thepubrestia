@@ -29,31 +29,113 @@ export type PermissionResource =
   | "expenses"
   | "checks"
   | "payments"
-  | "daily_close";
+  | "daily_close"
+  | "attendance"
+  | "services";
 
 export type NavItem = {
   title: string;
   href: string;
   resource: PermissionResource;
   action?: PermissionAction;
+  group: string;
 };
 
+export const NAV_GROUPS = [
+  "OPERACIÓN",
+  "CATÁLOGO",
+  "ABASTECIMIENTO",
+  "CLIENTES",
+  "EQUIPO",
+  "ADMINISTRACIÓN",
+  "CONFIGURACIÓN",
+] as const;
+
 export const NAV_ITEMS: NavItem[] = [
-  { title: "Dashboard", href: "/dashboard", resource: "dashboard" },
-  { title: "POS / Mesas", href: "/pos", resource: "pos" },
-  { title: "Órdenes", href: "/orders", resource: "orders" },
-  { title: "Cocina", href: "/kitchen", resource: "kitchen" },
-  { title: "Menú", href: "/menu", resource: "menu" },
-  { title: "Inventario", href: "/inventory", resource: "inventory" },
-  { title: "Compras", href: "/purchases", resource: "purchases" },
-  { title: "Proveedores", href: "/suppliers", resource: "suppliers" },
-  { title: "Clientes", href: "/customers", resource: "customers" },
-  { title: "Promociones", href: "/promotions", resource: "promotions" },
-  { title: "Reseñas", href: "/reviews", resource: "reviews" },
-  { title: "Empleados", href: "/employees", resource: "employees" },
-  { title: "Finanzas", href: "/finance", resource: "finance" },
-  { title: "Reportes", href: "/reports", resource: "reports" },
-  { title: "Configuración", href: "/settings", resource: "settings" },
+  { title: "Inicio", href: "/dashboard", resource: "dashboard", group: "OPERACIÓN" },
+  { title: "POS / Mesas", href: "/pos", resource: "pos", group: "OPERACIÓN" },
+  { title: "Órdenes", href: "/orders", resource: "orders", group: "OPERACIÓN" },
+  { title: "Cocina", href: "/kitchen", resource: "kitchen", group: "OPERACIÓN" },
+  {
+    title: "Cierre del día",
+    href: "/daily-close",
+    resource: "daily_close",
+    group: "OPERACIÓN",
+  },
+  { title: "Menú", href: "/menu", resource: "menu", group: "CATÁLOGO" },
+  {
+    title: "Inventario",
+    href: "/inventory",
+    resource: "inventory",
+    group: "CATÁLOGO",
+  },
+  {
+    title: "Pedidos",
+    href: "/purchases",
+    resource: "purchases",
+    group: "ABASTECIMIENTO",
+  },
+  {
+    title: "Proveedores",
+    href: "/suppliers",
+    resource: "suppliers",
+    group: "ABASTECIMIENTO",
+  },
+  {
+    title: "Clientes",
+    href: "/customers",
+    resource: "customers",
+    group: "CLIENTES",
+  },
+  {
+    title: "Promociones",
+    href: "/promotions",
+    resource: "promotions",
+    group: "CLIENTES",
+  },
+  { title: "Reseñas", href: "/reviews", resource: "reviews", group: "CLIENTES" },
+  {
+    title: "Empleados",
+    href: "/employees",
+    resource: "employees",
+    group: "EQUIPO",
+  },
+  {
+    title: "Asistencia",
+    href: "/attendance",
+    resource: "attendance",
+    group: "EQUIPO",
+  },
+  {
+    title: "Servicios y mantenimiento",
+    href: "/services",
+    resource: "services",
+    group: "ADMINISTRACIÓN",
+  },
+  {
+    title: "Gastos",
+    href: "/expenses",
+    resource: "expenses",
+    group: "ADMINISTRACIÓN",
+  },
+  {
+    title: "Finanzas",
+    href: "/finance",
+    resource: "finance",
+    group: "ADMINISTRACIÓN",
+  },
+  {
+    title: "Reportes",
+    href: "/reports",
+    resource: "reports",
+    group: "ADMINISTRACIÓN",
+  },
+  {
+    title: "Configuración",
+    href: "/settings",
+    resource: "settings",
+    group: "CONFIGURACIÓN",
+  },
 ];
 
 const ALL_RESOURCES: PermissionResource[] = [
@@ -77,6 +159,8 @@ const ALL_RESOURCES: PermissionResource[] = [
   "checks",
   "payments",
   "daily_close",
+  "attendance",
+  "services",
 ];
 
 const ALL_ACTIONS: PermissionAction[] = [
@@ -129,6 +213,12 @@ export function permissionsForRole(
         { resource: "reviews", action: "create" },
         { resource: "checks", action: "read" },
         { resource: "checks", action: "update" },
+        { resource: "checks", action: "close" },
+        { resource: "payments", action: "create" },
+        { resource: "payments", action: "read" },
+        { resource: "attendance", action: "read" },
+        { resource: "attendance", action: "create" },
+        { resource: "attendance", action: "update" },
       ];
     case "CASHIER":
       return [
@@ -144,6 +234,10 @@ export function permissionsForRole(
         { resource: "promotions", action: "read" },
         { resource: "promotions", action: "apply" },
         { resource: "customers", action: "read" },
+        { resource: "attendance", action: "read" },
+        { resource: "attendance", action: "create" },
+        { resource: "attendance", action: "update" },
+        { resource: "expenses", action: "read" },
       ];
     case "KITCHEN":
       return [
@@ -151,6 +245,9 @@ export function permissionsForRole(
         { resource: "kitchen", action: "update" },
         { resource: "orders", action: "read" },
         { resource: "orders", action: "update" },
+        { resource: "attendance", action: "read" },
+        { resource: "attendance", action: "create" },
+        { resource: "attendance", action: "update" },
       ];
     case "INVENTORY":
       return [
@@ -165,6 +262,9 @@ export function permissionsForRole(
         { resource: "suppliers", action: "read" },
         { resource: "suppliers", action: "create" },
         { resource: "suppliers", action: "update" },
+        { resource: "attendance", action: "read" },
+        { resource: "attendance", action: "create" },
+        { resource: "attendance", action: "update" },
       ];
     default:
       return [];

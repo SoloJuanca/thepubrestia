@@ -1,10 +1,11 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { RoleCode } from "@prisma/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -17,6 +18,7 @@ import {
   deactivateEmployeeAction,
   updateEmployeeAction,
 } from "@/features/employees/actions";
+import { cn } from "@/lib/utils";
 
 type EmployeeRow = {
   id: string;
@@ -92,7 +94,13 @@ export function EmployeesTable({ employees, roles }: Props) {
                   {e.active ? "Activo" : "Inactivo"}
                 </Badge>
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="space-x-2 text-right">
+                <Link
+                  href={`/employees/${e.id}`}
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                >
+                  Perfil
+                </Link>
                 {e.active ? (
                   <Button
                     variant="outline"
