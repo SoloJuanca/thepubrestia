@@ -1,7 +1,20 @@
-import { Suspense } from "react";
 import { LoginForm } from "@/features/auth/components/LoginForm";
 
-export default function LoginPage() {
+type Props = {
+  searchParams: Promise<{ callbackUrl?: string }>;
+};
+
+function safeCallbackUrl(value: string | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/dashboard";
+  }
+  return value;
+}
+
+export default async function LoginPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const callbackUrl = safeCallbackUrl(params.callbackUrl);
+
   return (
     <main className="relative flex min-h-svh items-center justify-center overflow-hidden px-4">
       <div
@@ -13,9 +26,7 @@ export default function LoginPage() {
         className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(oklch(1_0_0_/0.04)_1px,transparent_1px),linear-gradient(90deg,oklch(1_0_0_/0.04)_1px,transparent_1px)] [background-size:48px_48px]"
       />
       <div className="relative z-10 w-full max-w-md">
-        <Suspense fallback={<div className="text-white">Cargando…</div>}>
-          <LoginForm />
-        </Suspense>
+        <LoginForm callbackUrl={callbackUrl} />
       </div>
     </main>
   );

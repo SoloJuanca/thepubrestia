@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,10 +14,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export function LoginForm() {
+type LoginFormProps = {
+  callbackUrl?: string;
+};
+
+export function LoginForm({ callbackUrl = "/dashboard" }: LoginFormProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
   const [email, setEmail] = useState("admin@thepub.local");
   const [password, setPassword] = useState("Password123!");
   const [error, setError] = useState<string | null>(null);
@@ -28,21 +30,25 @@ export function LoginForm() {
     setLoading(true);
     setError(null);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-    setLoading(false);
+      if (result?.error) {
+        setError("Credenciales inválidas o usuario inactivo.");
+        return;
+      }
 
-    if (result?.error) {
-      setError("Credenciales inválidas o usuario inactivo.");
-      return;
+      router.push(callbackUrl);
+      router.refresh();
+    } catch {
+      setError("No se pudo iniciar sesión. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push(callbackUrl);
-    router.refresh();
   }
 
   return (
