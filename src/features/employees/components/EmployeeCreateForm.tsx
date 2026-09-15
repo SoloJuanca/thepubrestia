@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createEmployeeAction } from "@/features/employees/actions";
+import { permissionsForRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS: Weekday[] = [
@@ -27,6 +28,27 @@ const WEEKDAYS: Weekday[] = [
   "SUNDAY",
 ];
 
+const JOB_TITLES = [
+  "Administrador",
+  "Gerente",
+  "Mesero",
+  "Cocina",
+  "Auxiliar cocina",
+  "Bartender",
+  "Caja",
+  "Otro",
+] as const;
+
+const MATRIX_RESOURCES = [
+  { resource: "pos", label: "POS" },
+  { resource: "inventory", label: "Inventario" },
+  { resource: "purchases", label: "Pedidos" },
+  { resource: "employees", label: "Empleados" },
+  { resource: "finance", label: "Finanzas" },
+  { resource: "attendance", label: "Asistencia" },
+  { resource: "services", label: "Servicios" },
+] as const;
+
 type Props = {
   roles: Array<{ code: RoleCode; name: string }>;
   locations: Array<{ id: string; name: string }>;
@@ -34,11 +56,11 @@ type Props = {
 
 const STEPS = [
   "Datos",
-  "Acceso",
-  "Rol",
+  "Empleo",
+  "Salario",
   "Horario",
-  "Compensación",
-  "Confirmar",
+  "Permisos",
+  "Acceso",
 ] as const;
 
 const WEEKDAY_LABELS: Record<Weekday, string> = {
@@ -67,15 +89,31 @@ function defaultSchedule(): ScheduleDay[] {
   }));
 }
 
+function accessLabel(
+  perms: Array<{ resource: string; action: string }>,
+  resource: string,
+) {
+  const canUpdate = perms.some(
+    (p) => p.resource === resource && (p.action === "update" || p.action === "create"),
+  );
+  const canRead = perms.some(
+    (p) => p.resource === resource && p.action === "read",
+  );
+  if (canUpdate) return "Ver / Editar";
+  if (canRead) return "Solo ver";
+  return "Sin acceso";
+}
+
 export function EmployeeCreateForm({ roles, locations }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [step, setStep] = useState(0);
+  const [customJob, setCustomJob] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
     phone: "",
-    jobTitle: "",
+    jobTitle: "Mesero",
     hireDate: new Date().toISOString().slice(0, 10),
     password: "",
     roleCode: (roles[0]?.code ?? "WAITER") as RoleCode,
@@ -90,10 +128,15 @@ export function EmployeeCreateForm({ roles, locations }: Props) {
     },
   });
 
+  const rolePerms = useMemo(
+    () => permissionsForRole(form.roleCode),
+    [form.roleCode],
+  );
+
   const canNext = useMemo(() => {
     if (step === 0) return form.name.trim().length >= 2 && form.email.includes("@");
-    if (step === 1) return form.password.length >= 8;
-    if (step === 2) return Boolean(form.locationId && form.roleCode);
+    if (step === 1) return Boolean(form.locationId && form.roleCode && form.jobTitle);
+    if (step === 5) return form.password.length >= 8;
     return true;
   }, [step, form]);
 
@@ -187,12 +230,48 @@ export function EmployeeCreateForm({ roles, locations }: Props) {
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
               />
             </Field>
+          </div>
+        ) : null}
+
+        {step === 1 ? (
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Puesto">
-              <Input
-                value={form.jobTitle}
-                onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
-                placeholder="Mesero, barista…"
-              />
+              <div className="flex flex-wrap gap-1">
+                {JOB_TITLES.map((title) => (
+                  <button
+                    key={title}
+                    type="button"
+                    className={cn(
+                      "rounded-lg px-2.5 py-1.5 text-xs font-medium",
+                      form.jobTitle === title ||
+                        (title === "Otro" && customJob)
+                        ? "bg-[var(--pub-blue)] text-white"
+                        : "bg-muted",
+                    )}
+                    onClick={() => {
+                      if (title === "Otro") {
+                        setCustomJob(true);
+                        setForm({ ...form, jobTitle: "" });
+                      } else {
+                        setCustomJob(false);
+                        setForm({ ...form, jobTitle: title });
+                      }
+                    }}
+                  >
+                    {title}
+                  </button>
+                ))}
+              </div>
+              {customJob ? (
+                <Input
+                  className="mt-2"
+                  placeholder="Especificar puesto"
+                  value={form.jobTitle}
+                  onChange={(e) =>
+                    setForm({ ...form, jobTitle: e.target.value })
+                  }
+                />
+              ) : null}
             </Field>
             <Field label="Fecha de ingreso">
               <Input
@@ -201,26 +280,7 @@ export function EmployeeCreateForm({ roles, locations }: Props) {
                 onChange={(e) => setForm({ ...form, hireDate: e.target.value })}
               />
             </Field>
-          </div>
-        ) : null}
-
-        {step === 1 ? (
-          <div className="max-w-sm space-y-2">
-            <Label>Contraseña temporal</Label>
-            <Input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              minLength={8}
-              required
-            />
-            <p className="text-xs text-muted-foreground">Mínimo 8 caracteres.</p>
-          </div>
-        ) : null}
-
-        {step === 2 ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Rol">
+            <Field label="Rol del sistema">
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                 value={form.roleCode}
@@ -253,52 +313,7 @@ export function EmployeeCreateForm({ roles, locations }: Props) {
           </div>
         ) : null}
 
-        {step === 3 ? (
-          <div className="space-y-2">
-            {form.schedule.map((d) => (
-              <div
-                key={d.weekday}
-                className="grid grid-cols-[3.5rem_auto_1fr_1fr] items-center gap-2 rounded-lg border border-border px-3 py-2"
-              >
-                <span className="text-sm font-medium">
-                  {WEEKDAY_LABELS[d.weekday]}
-                </span>
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={d.isDayOff}
-                    onChange={(e) =>
-                      updateDay(d.weekday, {
-                        isDayOff: e.target.checked,
-                        startTime: e.target.checked ? null : d.startTime ?? "10:00",
-                        endTime: e.target.checked ? null : d.endTime ?? "18:00",
-                      })
-                    }
-                  />
-                  Descanso
-                </label>
-                <Input
-                  type="time"
-                  disabled={d.isDayOff}
-                  value={d.startTime ?? ""}
-                  onChange={(e) =>
-                    updateDay(d.weekday, { startTime: e.target.value })
-                  }
-                />
-                <Input
-                  type="time"
-                  disabled={d.isDayOff}
-                  value={d.endTime ?? ""}
-                  onChange={(e) =>
-                    updateDay(d.weekday, { endTime: e.target.value })
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {step === 4 ? (
+        {step === 2 ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Tipo de pago">
               <select
@@ -371,27 +386,122 @@ export function EmployeeCreateForm({ roles, locations }: Props) {
           </div>
         ) : null}
 
+        {step === 3 ? (
+          <div className="space-y-2">
+            {form.schedule.map((d) => (
+              <div
+                key={d.weekday}
+                className="grid grid-cols-[3.5rem_auto_1fr_1fr] items-center gap-2 rounded-lg border border-border px-3 py-2"
+              >
+                <span className="text-sm font-medium">
+                  {WEEKDAY_LABELS[d.weekday]}
+                </span>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={d.isDayOff}
+                    onChange={(e) =>
+                      updateDay(d.weekday, {
+                        isDayOff: e.target.checked,
+                        startTime: e.target.checked
+                          ? null
+                          : (d.startTime ?? "10:00"),
+                        endTime: e.target.checked
+                          ? null
+                          : (d.endTime ?? "18:00"),
+                      })
+                    }
+                  />
+                  Día libre
+                </label>
+                <Input
+                  type="time"
+                  disabled={d.isDayOff}
+                  value={d.startTime ?? ""}
+                  onChange={(e) =>
+                    updateDay(d.weekday, { startTime: e.target.value })
+                  }
+                />
+                <Input
+                  type="time"
+                  disabled={d.isDayOff}
+                  value={d.endTime ?? ""}
+                  onChange={(e) =>
+                    updateDay(d.weekday, { endTime: e.target.value })
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {step === 4 ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Matriz derivada del rol{" "}
+              <strong>
+                {roles.find((r) => r.code === form.roleCode)?.name}
+              </strong>{" "}
+              (solo lectura).
+            </p>
+            <div className="overflow-hidden rounded-xl border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Módulo</th>
+                    <th className="px-3 py-2 text-left font-medium">Acceso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MATRIX_RESOURCES.map((row) => (
+                    <tr key={row.resource} className="border-t border-border">
+                      <td className="px-3 py-2">{row.label}</td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {accessLabel(rolePerms, row.resource)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+
         {step === 5 ? (
-          <div className="space-y-2 rounded-xl border border-border bg-surface-secondary/50 p-4 text-sm">
-            <p>
-              <span className="text-muted-foreground">Nombre:</span> {form.name}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Correo:</span> {form.email}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Rol:</span>{" "}
-              {roles.find((r) => r.code === form.roleCode)?.name}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Sucursal:</span>{" "}
-              {locations.find((l) => l.id === form.locationId)?.name}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Compensación:</span> $
-              {Number(form.compensation.amount || 0).toFixed(2)} (
-              {form.compensation.type})
-            </p>
+          <div className="space-y-4">
+            <div className="max-w-sm space-y-2">
+              <Label>Contraseña temporal</Label>
+              <Input
+                type="password"
+                value={form.password}
+                onChange={(e) =>
+                  setForm({ ...form, password: e.target.value })
+                }
+                minLength={8}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Mínimo 8 caracteres. Entrégala al empleado para su primer acceso.
+              </p>
+            </div>
+            <div className="space-y-2 rounded-xl border border-border bg-surface-secondary/50 p-4 text-sm">
+              <p>
+                <span className="text-muted-foreground">Nombre:</span>{" "}
+                {form.name}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Puesto:</span>{" "}
+                {form.jobTitle}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Rol:</span>{" "}
+                {roles.find((r) => r.code === form.roleCode)?.name}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Sucursal:</span>{" "}
+                {locations.find((l) => l.id === form.locationId)?.name}
+              </p>
+            </div>
           </div>
         ) : null}
 
@@ -413,7 +523,11 @@ export function EmployeeCreateForm({ roles, locations }: Props) {
               Siguiente
             </Button>
           ) : (
-            <Button type="button" disabled={pending} onClick={onSubmit}>
+            <Button
+              type="button"
+              disabled={!canNext || pending}
+              onClick={onSubmit}
+            >
               {pending ? "Guardando…" : "Crear empleado"}
             </Button>
           )}

@@ -43,7 +43,7 @@ export function AlertsPanel({
         <SummaryCard
           title="Pedidos pendientes"
           value={String(pendingPurchaseOrders)}
-          hint="Órdenes de compra (Fase 6)"
+          hint="Pedidos a proveedor pendientes"
         />
       </div>
 

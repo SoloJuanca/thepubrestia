@@ -75,6 +75,7 @@ export default async function SuppliersPage() {
         whatsapp: s.whatsapp,
         email: s.email,
         notes: s.notes,
+        leadTimeDays: s.leadTimeDays,
         active: s.active,
         schedules: s.schedules.map((sch) => ({
           orderDay: sch.orderDay,

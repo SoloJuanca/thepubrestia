@@ -29,6 +29,7 @@ export const createSupplierSchema = z.object({
   whatsapp: z.string().max(40).optional().nullable(),
   email: z.string().email().optional().nullable().or(z.literal("")),
   notes: z.string().max(1000).optional().nullable(),
+  leadTimeDays: z.coerce.number().int().min(0).max(60).optional().nullable(),
   active: z.boolean().default(true),
 });
 

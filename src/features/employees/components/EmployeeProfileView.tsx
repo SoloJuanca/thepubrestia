@@ -31,6 +31,8 @@ import {
   updateEmployeeAction,
   upsertEmployeeCompensationAction,
   upsertEmployeeScheduleAction,
+  createTimeOffAction,
+  deleteTimeOffAction,
 } from "@/features/employees/actions";
 
 type ScheduleDay = {
@@ -48,6 +50,13 @@ type AttendanceRow = {
   notes: string | null;
 };
 
+type TimeOffRow = {
+  id: string;
+  type: string;
+  dateLabel: string;
+  notes: string | null;
+};
+
 type Props = {
   employee: {
     id: string;
@@ -58,6 +67,7 @@ type Props = {
     profileId: string;
     phone: string | null;
     jobTitle: string | null;
+    locationId: string;
     locationName: string;
     hireDate: string | null;
   };
@@ -71,6 +81,7 @@ type Props = {
     notes: string | null;
   } | null;
   attendance: AttendanceRow[];
+  timeOffs: TimeOffRow[];
 };
 
 const WEEKDAY_LABELS: Record<Weekday, string> = {
@@ -83,7 +94,21 @@ const WEEKDAY_LABELS: Record<Weekday, string> = {
   SUNDAY: "Domingo",
 };
 
-const TABS = ["Perfil", "Horario", "Compensación", "Asistencia"] as const;
+const TIME_OFF_LABELS: Record<string, string> = {
+  WEEKLY_OFF: "Día libre semanal",
+  ABSENCE: "Ausencia",
+  VACATION: "Vacaciones",
+  PERMISSION: "Permiso",
+  SICK: "Incapacidad",
+};
+
+const TABS = [
+  "Perfil",
+  "Horario",
+  "Compensación",
+  "Asistencia",
+  "Ausencias",
+] as const;
 
 export function EmployeeProfileView({
   employee,
@@ -91,9 +116,15 @@ export function EmployeeProfileView({
   schedule: initialSchedule,
   compensation: initialComp,
   attendance,
+  timeOffs,
 }: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Perfil");
   const [pending, startTransition] = useTransition();
+  const [timeOffType, setTimeOffType] = useState("VACATION");
+  const [timeOffDate, setTimeOffDate] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
+  const [timeOffNotes, setTimeOffNotes] = useState("");
   const [profile, setProfile] = useState({
     name: employee.name ?? "",
     phone: employee.phone ?? "",
@@ -400,6 +431,114 @@ export function EmployeeProfileView({
                       <TableCell>{a.checkOutAt ?? "—"}</TableCell>
                       <TableCell>{a.status}</TableCell>
                       <TableCell>{a.notes ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {tab === "Ausencias" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Días libres y ausencias</CardTitle>
+            <CardDescription>
+              Distinto del descanso semanal del horario. No cuenta un día libre
+              planeado como ausencia.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="space-y-2 sm:col-span-1">
+                <Label>Tipo</Label>
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={timeOffType}
+                  onChange={(e) => setTimeOffType(e.target.value)}
+                >
+                  {Object.entries(TIME_OFF_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha</Label>
+                <Input
+                  type="date"
+                  value={timeOffDate}
+                  onChange={(e) => setTimeOffDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Notas</Label>
+                <Input
+                  value={timeOffNotes}
+                  onChange={(e) => setTimeOffNotes(e.target.value)}
+                />
+              </div>
+            </div>
+            <Button
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const result = await createTimeOffAction({
+                    employeeProfileId: employee.profileId,
+                    locationId: employee.locationId,
+                    type: timeOffType,
+                    date: timeOffDate,
+                    notes: timeOffNotes || null,
+                  });
+                  if (!result.ok) toast.error(result.error);
+                  else {
+                    toast.success(result.message);
+                    setTimeOffNotes("");
+                  }
+                })
+              }
+            >
+              Registrar
+            </Button>
+
+            {timeOffs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sin registros.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Notas</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {timeOffs.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell>{t.dateLabel}</TableCell>
+                      <TableCell>
+                        {TIME_OFF_LABELS[t.type] ?? t.type}
+                      </TableCell>
+                      <TableCell>{t.notes ?? "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={pending}
+                          onClick={() =>
+                            startTransition(async () => {
+                              const result = await deleteTimeOffAction(t.id);
+                              if (!result.ok) toast.error(result.error);
+                              else toast.success(result.message);
+                            })
+                          }
+                        >
+                          Quitar
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

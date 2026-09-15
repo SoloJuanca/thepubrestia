@@ -686,6 +686,12 @@ async function main() {
     });
   }
 
+  const { seedMenuAlimentos } = await import("./seed-menu-alimentos");
+  const menuResult = await seedMenuAlimentos(location.id);
+  console.log(
+    `Menú alimentos: ${menuResult.productsUpserted} productos en ${menuResult.categoriesUpserted} categorías`,
+  );
+
   console.log("Seed complete.");
   console.log(`Demo password for all employees: ${DEMO_PASSWORD}`);
   console.log("Accounts: superadmin@thepub.local, admin@thepub.local, waiter@thepub.local, ...");

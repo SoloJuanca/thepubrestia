@@ -59,7 +59,7 @@ export function PublicReviewForm({ token, restaurantName, tableName }: Props) {
       <CardContent className="space-y-3">
         {(
           [
-            ["overallRating", "General"],
+            ["overallRating", "Calificación general"],
             ["foodRating", "Comida"],
             ["serviceRating", "Servicio"],
             ["ambienceRating", "Ambiente"],

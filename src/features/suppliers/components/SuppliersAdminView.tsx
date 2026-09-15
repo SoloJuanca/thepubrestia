@@ -44,6 +44,7 @@ export type SupplierRow = {
   whatsapp: string | null;
   email: string | null;
   notes: string | null;
+  leadTimeDays: number | null;
   active: boolean;
   schedules: Array<{ orderDay: string; deliveryDay: string }>;
   products: Array<{
@@ -90,8 +91,16 @@ const emptyForm = {
   whatsapp: "",
   email: "",
   notes: "",
+  leadTimeDays: "",
   active: true,
 };
+
+const DETAIL_TABS = [
+  "Información",
+  "Productos",
+  "Calendario",
+  "Pedidos",
+] as const;
 
 const WEEKDAY_TO_JS: Record<string, number> = {
   SUNDAY: 0,
@@ -137,6 +146,8 @@ export function SuppliersAdminView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [selectedId, setSelectedId] = useState(suppliers[0]?.id ?? "");
+  const [detailTab, setDetailTab] =
+    useState<(typeof DETAIL_TABS)[number]>("Información");
   const [orderDay, setOrderDay] = useState<(typeof WEEKDAY_OPTIONS)[number]>(
     "MONDAY",
   );
@@ -170,6 +181,8 @@ export function SuppliersAdminView({
       whatsapp: row.whatsapp ?? "",
       email: row.email ?? "",
       notes: row.notes ?? "",
+      leadTimeDays:
+        row.leadTimeDays != null ? String(row.leadTimeDays) : "",
       active: row.active,
     });
   }
@@ -183,6 +196,8 @@ export function SuppliersAdminView({
         phone: form.phone || null,
         whatsapp: form.whatsapp || null,
         notes: form.notes || null,
+        leadTimeDays:
+          form.leadTimeDays === "" ? null : Number(form.leadTimeDays),
       };
       const result = editingId
         ? await updateSupplierAction({ id: editingId, ...payload })
@@ -364,6 +379,20 @@ export function SuppliersAdminView({
               </div>
             </div>
             <div className="space-y-1">
+              <Label>Lead time (días)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={60}
+                value={form.leadTimeDays}
+                disabled={!canWrite || pending}
+                placeholder="Ej. 2"
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, leadTimeDays: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1">
               <Label>Notas</Label>
               <Textarea
                 rows={2}
@@ -434,12 +463,22 @@ export function SuppliersAdminView({
                         {nextOrder ? (
                           <p className="mt-1 text-xs text-[var(--pub-blue-dark)]">
                             Próximo pedido: {nextOrder}
+                            {row.leadTimeDays != null
+                              ? ` · lead ${row.leadTimeDays}d`
+                              : ""}
                           </p>
                         ) : (
                           <p className="mt-1 text-xs text-muted-foreground">
                             Sin calendario de pedido
+                            {row.leadTimeDays != null
+                              ? ` · lead ${row.leadTimeDays}d`
+                              : ""}
                           </p>
                         )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {row.products.length} productos · Contacto:{" "}
+                          {row.contact || "—"}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant={row.active ? "default" : "secondary"}>
@@ -468,230 +507,336 @@ export function SuppliersAdminView({
       </div>
 
       {selected ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Calendario — {selected.name}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <ul className="space-y-2 text-sm">
-                {selected.schedules.length === 0 ? (
-                  <li className="text-muted-foreground">Sin días configurados.</li>
-                ) : (
-                  selected.schedules.map((s, index) => (
-                    <li
-                      key={`${s.orderDay}-${s.deliveryDay}-${index}`}
-                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-                    >
-                      <span>
-                        Pedir {WEEKDAY_LABELS[s.orderDay]} → entrega{" "}
-                        {WEEKDAY_LABELS[s.deliveryDay]}
-                      </span>
-                      {canWrite ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={pending}
-                          onClick={() => removeSchedule(index)}
-                        >
-                          Quitar
-                        </Button>
-                      ) : null}
-                    </li>
-                  ))
-                )}
-              </ul>
-              {canWrite ? (
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="space-y-1">
-                    <Label>Día pedido</Label>
-                    <select
-                      className="flex h-10 rounded-md border border-input bg-transparent px-2 text-sm"
-                      value={orderDay}
-                      onChange={(e) =>
-                        setOrderDay(
-                          e.target.value as (typeof WEEKDAY_OPTIONS)[number],
-                        )
-                      }
-                    >
-                      {WEEKDAY_OPTIONS.map((d) => (
-                        <option key={d} value={d}>
-                          {WEEKDAY_LABELS[d]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Día entrega</Label>
-                    <select
-                      className="flex h-10 rounded-md border border-input bg-transparent px-2 text-sm"
-                      value={deliveryDay}
-                      onChange={(e) =>
-                        setDeliveryDay(
-                          e.target.value as (typeof WEEKDAY_OPTIONS)[number],
-                        )
-                      }
-                    >
-                      {WEEKDAY_OPTIONS.map((d) => (
-                        <option key={d} value={d}>
-                          {WEEKDAY_LABELS[d]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Button disabled={pending} onClick={addSchedule}>
-                    Agregar
-                  </Button>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">{selected.name}</h2>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {DETAIL_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setDetailTab(tab)}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                    detailTab === tab
+                      ? "bg-[var(--pub-blue)] text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80",
+                  )}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Catálogo</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Insumo</TableHead>
-                    <TableHead>Costo</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selected.products.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>
-                        <div className="font-medium">{p.ingredientName}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {p.supplierSku ?? "sin SKU"} · {UNIT_LABELS[p.unit]}
-                        </div>
-                      </TableCell>
-                      <TableCell>${p.unitCost}</TableCell>
-                      <TableCell>
+          {detailTab === "Información" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Información</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p>
+                  <span className="text-muted-foreground">Contacto:</span>{" "}
+                  {selected.contact || "—"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">WhatsApp:</span>{" "}
+                  {selected.whatsapp || "—"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Teléfono:</span>{" "}
+                  {selected.phone || "—"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Email:</span>{" "}
+                  {selected.email || "—"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Lead time:</span>{" "}
+                  {selected.leadTimeDays != null
+                    ? `${selected.leadTimeDays} días`
+                    : "—"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Notas:</span>{" "}
+                  {selected.notes || "—"}
+                </p>
+                {canWrite ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => startEdit(selected)}
+                  >
+                    Editar datos
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {detailTab === "Calendario" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Calendario — {selected.name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <ul className="space-y-2 text-sm">
+                  {selected.schedules.length === 0 ? (
+                    <li className="text-muted-foreground">
+                      Sin días configurados.
+                    </li>
+                  ) : (
+                    selected.schedules.map((s, index) => (
+                      <li
+                        key={`${s.orderDay}-${s.deliveryDay}-${index}`}
+                        className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+                      >
+                        <span>
+                          Pedir {WEEKDAY_LABELS[s.orderDay]} {"->"} entrega{" "}
+                          {WEEKDAY_LABELS[s.deliveryDay]}
+                        </span>
                         {canWrite ? (
                           <Button
                             size="sm"
                             variant="ghost"
                             disabled={pending}
-                            onClick={() =>
-                              startTransition(async () => {
-                                const result =
-                                  await removeSupplierProductAction({
-                                    id: p.id,
-                                  });
-                                if (!result.ok) toast.error(result.error);
-                                else toast.success(result.message);
-                              })
-                            }
+                            onClick={() => removeSchedule(index)}
                           >
                             Quitar
                           </Button>
                         ) : null}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {canWrite ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="space-y-1 sm:col-span-2">
-                    <Label>Ingrediente</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-transparent px-2 text-sm"
-                      value={catalog.ingredientId}
-                      onChange={(e) => {
-                        const ing = ingredients.find(
-                          (i) => i.id === e.target.value,
-                        );
-                        setCatalog((c) => ({
-                          ...c,
-                          ingredientId: e.target.value,
-                          unit: (ing?.baseUnit as (typeof UNIT_OPTIONS)[number]) ??
-                            c.unit,
-                          unitCost: ing?.averageCost ?? c.unitCost,
-                        }));
-                      }}
-                    >
-                      <option value="">Seleccionar…</option>
-                      {ingredients.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>SKU</Label>
-                    <Input
-                      value={catalog.supplierSku}
-                      onChange={(e) =>
-                        setCatalog((c) => ({
-                          ...c,
-                          supplierSku: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Unidad</Label>
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-transparent px-2 text-sm"
-                      value={catalog.unit}
-                      onChange={(e) =>
-                        setCatalog((c) => ({
-                          ...c,
-                          unit: e.target.value as (typeof UNIT_OPTIONS)[number],
-                        }))
-                      }
-                    >
-                      {UNIT_OPTIONS.map((u) => (
-                        <option key={u} value={u}>
-                          {UNIT_LABELS[u]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Costo unitario</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.0001"
-                      value={catalog.unitCost}
-                      onChange={(e) =>
-                        setCatalog((c) => ({ ...c, unitCost: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Mín. pedido</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={catalog.minOrderQty}
-                      onChange={(e) =>
-                        setCatalog((c) => ({
-                          ...c,
-                          minOrderQty: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Button disabled={pending} onClick={saveProduct}>
-                      Guardar en catálogo
+                      </li>
+                    ))
+                  )}
+                </ul>
+                {canWrite ? (
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="space-y-1">
+                      <Label>Día pedido</Label>
+                      <select
+                        className="flex h-10 rounded-md border border-input bg-transparent px-2 text-sm"
+                        value={orderDay}
+                        onChange={(e) =>
+                          setOrderDay(
+                            e.target.value as (typeof WEEKDAY_OPTIONS)[number],
+                          )
+                        }
+                      >
+                        {WEEKDAY_OPTIONS.map((d) => (
+                          <option key={d} value={d}>
+                            {WEEKDAY_LABELS[d]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Día entrega</Label>
+                      <select
+                        className="flex h-10 rounded-md border border-input bg-transparent px-2 text-sm"
+                        value={deliveryDay}
+                        onChange={(e) =>
+                          setDeliveryDay(
+                            e.target.value as (typeof WEEKDAY_OPTIONS)[number],
+                          )
+                        }
+                      >
+                        {WEEKDAY_OPTIONS.map((d) => (
+                          <option key={d} value={d}>
+                            {WEEKDAY_LABELS[d]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button disabled={pending} onClick={addSchedule}>
+                      Agregar
                     </Button>
                   </div>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {detailTab === "Productos" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Productos y precios</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Insumo</TableHead>
+                      <TableHead>Costo</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selected.products.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>
+                          <div className="font-medium">{p.ingredientName}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {p.supplierSku ?? "sin SKU"} ·{" "}
+                            {UNIT_LABELS[p.unit]}
+                          </div>
+                        </TableCell>
+                        <TableCell>${p.unitCost}</TableCell>
+                        <TableCell>
+                          {canWrite ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={pending}
+                              onClick={() =>
+                                startTransition(async () => {
+                                  const result =
+                                    await removeSupplierProductAction({
+                                      id: p.id,
+                                    });
+                                  if (!result.ok) toast.error(result.error);
+                                  else toast.success(result.message);
+                                })
+                              }
+                            >
+                              Quitar
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {canWrite ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label>Ingrediente</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                        value={catalog.ingredientId}
+                        onChange={(e) => {
+                          const ing = ingredients.find(
+                            (i) => i.id === e.target.value,
+                          );
+                          setCatalog((c) => ({
+                            ...c,
+                            ingredientId: e.target.value,
+                            unit:
+                              (ing?.baseUnit as (typeof UNIT_OPTIONS)[number]) ??
+                              c.unit,
+                            unitCost: ing?.averageCost ?? c.unitCost,
+                          }));
+                        }}
+                      >
+                        <option value="">Seleccionar…</option>
+                        {ingredients.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>SKU</Label>
+                      <Input
+                        value={catalog.supplierSku}
+                        onChange={(e) =>
+                          setCatalog((c) => ({
+                            ...c,
+                            supplierSku: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Unidad</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                        value={catalog.unit}
+                        onChange={(e) =>
+                          setCatalog((c) => ({
+                            ...c,
+                            unit: e.target.value as (typeof UNIT_OPTIONS)[number],
+                          }))
+                        }
+                      >
+                        {UNIT_OPTIONS.map((u) => (
+                          <option key={u} value={u}>
+                            {UNIT_LABELS[u]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Costo unitario</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.0001"
+                        value={catalog.unitCost}
+                        onChange={(e) =>
+                          setCatalog((c) => ({
+                            ...c,
+                            unitCost: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Mín. pedido</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={catalog.minOrderQty}
+                        onChange={(e) =>
+                          setCatalog((c) => ({
+                            ...c,
+                            minOrderQty: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Button disabled={pending} onClick={saveProduct}>
+                        Guardar en catálogo
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {detailTab === "Pedidos" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Pedidos</CardTitle>
+                <CardDescription>
+                  Gestiona pedidos a este proveedor desde el módulo Pedidos.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p>
+                  Productos en catálogo:{" "}
+                  <strong>{selected.products.length}</strong>
+                </p>
+                <p>
+                  Próximo día de pedido:{" "}
+                  {nextOrderDayLabel(selected.schedules) ?? "Sin calendario"}
+                </p>
+                <a
+                  href="/purchases"
+                  className={cn(
+                    "inline-flex h-9 items-center rounded-md bg-[var(--pub-blue)] px-3 text-sm font-medium text-white",
+                  )}
+                >
+                  Ir a pedidos
+                </a>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       ) : null}
     </div>

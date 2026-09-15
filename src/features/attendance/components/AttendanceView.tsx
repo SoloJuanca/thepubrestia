@@ -1,9 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -20,8 +22,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   checkInAction,
   checkOutAction,
+  correctAttendanceAction,
 } from "@/features/attendance/actions";
 
 export type AttendanceRow = {
@@ -29,7 +38,10 @@ export type AttendanceRow = {
   employeeName: string;
   checkInLabel: string;
   checkOutLabel: string | null;
+  checkInIso: string;
+  checkOutIso: string | null;
   status: string;
+  notes: string | null;
   isMine: boolean;
 };
 
@@ -37,6 +49,7 @@ type Props = {
   employeeName: string | null;
   hasOpenAttendance: boolean;
   canCheck: boolean;
+  canCorrect: boolean;
   todayLabel: string;
   rows: AttendanceRow[];
 };
@@ -54,10 +67,52 @@ export function AttendanceView({
   employeeName,
   hasOpenAttendance,
   canCheck,
+  canCorrect,
   todayLabel,
   rows,
 }: Props) {
   const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState<AttendanceRow | null>(null);
+  const [status, setStatus] = useState("COMPLETE");
+  const [notes, setNotes] = useState("");
+  const [checkInLocal, setCheckInLocal] = useState("");
+  const [checkOutLocal, setCheckOutLocal] = useState("");
+
+  function openCorrect(row: AttendanceRow) {
+    setEditing(row);
+    setStatus(row.status === "OPEN" ? "OPEN" : row.status);
+    setNotes(row.notes ?? "");
+    setCheckInLocal(toLocalInput(row.checkInIso));
+    setCheckOutLocal(row.checkOutIso ? toLocalInput(row.checkOutIso) : "");
+  }
+
+  function saveCorrect() {
+    if (!editing) return;
+    startTransition(async () => {
+      const result = await correctAttendanceAction({
+        id: editing.id,
+        status: status as
+          | "ON_TIME"
+          | "LATE"
+          | "EARLY_LEAVE"
+          | "COMPLETE"
+          | "OPEN"
+          | "ABSENT",
+        notes: notes || null,
+        checkInAt: checkInLocal
+          ? new Date(checkInLocal).toISOString()
+          : undefined,
+        checkOutAt: checkOutLocal
+          ? new Date(checkOutLocal).toISOString()
+          : null,
+      });
+      if (!result.ok) toast.error(result.error);
+      else {
+        toast.success(result.message);
+        setEditing(null);
+      }
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -108,7 +163,7 @@ export function AttendanceView({
       )}
 
       {hasOpenAttendance ? (
-        <p className="text-sm text-[var(--brand-blue,#2563eb)]">
+        <p className="text-sm text-[var(--pub-blue-dark)]">
           Tienes un turno abierto. Registra la salida al terminar.
         </p>
       ) : null}
@@ -118,6 +173,9 @@ export function AttendanceView({
           <CardTitle className="text-base">Asistencias de hoy</CardTitle>
           <CardDescription>
             Entradas y salidas registradas en la sucursal.
+            {canCorrect
+              ? " Las correcciones quedan auditadas."
+              : ""}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -133,6 +191,7 @@ export function AttendanceView({
                   <TableHead>Entrada</TableHead>
                   <TableHead>Salida</TableHead>
                   <TableHead>Estado</TableHead>
+                  {canCorrect ? <TableHead /> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -150,11 +209,24 @@ export function AttendanceView({
                     <TableCell>{row.checkOutLabel ?? "—"}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={row.status === "OPEN" ? "default" : "secondary"}
+                        variant={
+                          row.status === "OPEN" ? "default" : "secondary"
+                        }
                       >
                         {STATUS_LABELS[row.status] ?? row.status}
                       </Badge>
                     </TableCell>
+                    {canCorrect ? (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openCorrect(row)}
+                        >
+                          Corregir
+                        </Button>
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -162,6 +234,64 @@ export function AttendanceView({
           )}
         </CardContent>
       </Card>
+
+      <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>
+              Corregir asistencia — {editing?.employeeName}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">
+            <div className="space-y-2">
+              <Label>Entrada</Label>
+              <Input
+                type="datetime-local"
+                value={checkInLocal}
+                onChange={(e) => setCheckInLocal(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Salida</Label>
+              <Input
+                type="datetime-local"
+                value={checkOutLocal}
+                onChange={(e) => setCheckOutLocal(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Notas de corrección</Label>
+              <Input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
+            <Button disabled={pending} onClick={saveCorrect}>
+              Guardar corrección
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
+}
+
+function toLocalInput(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

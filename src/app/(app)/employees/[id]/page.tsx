@@ -36,6 +36,10 @@ export default async function EmployeeDetailPage({ params }: Props) {
               orderBy: { checkInAt: "desc" },
               take: 30,
             },
+            timeOffs: {
+              orderBy: { date: "desc" },
+              take: 40,
+            },
           },
         },
       },
@@ -73,6 +77,7 @@ export default async function EmployeeDetailPage({ params }: Props) {
         profileId: profile.id,
         phone: profile.phone,
         jobTitle: profile.jobTitle,
+        locationId: profile.locationId,
         locationName: profile.location.name,
         hireDate: profile.hireDate
           ? format(profile.hireDate, "yyyy-MM-dd")
@@ -102,6 +107,12 @@ export default async function EmployeeDetailPage({ params }: Props) {
           : null,
         status: a.status,
         notes: a.notes,
+      }))}
+      timeOffs={profile.timeOffs.map((t) => ({
+        id: t.id,
+        type: t.type,
+        dateLabel: format(t.date, "dd/MM/yyyy"),
+        notes: t.notes,
       }))}
     />
   );

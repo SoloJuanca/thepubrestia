@@ -38,6 +38,34 @@ export const updateAttendanceStatusSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+export const correctAttendanceSchema = z.object({
+  id: z.string().min(1),
+  checkInAt: z.string().min(1).optional(),
+  checkOutAt: z.string().optional().nullable(),
+  status: attendanceStatusEnum.optional(),
+  notes: z.string().max(500).optional().nullable(),
+});
+
+const timeOffTypeEnum = z.enum([
+  "WEEKLY_OFF",
+  "ABSENCE",
+  "VACATION",
+  "PERMISSION",
+  "SICK",
+]);
+
+export const createTimeOffSchema = z.object({
+  employeeProfileId: z.string().min(1),
+  locationId: z.string().min(1),
+  type: timeOffTypeEnum,
+  date: z.string().min(1),
+  notes: z.string().max(500).optional().nullable(),
+});
+
+export const deleteTimeOffSchema = z.object({
+  id: z.string().min(1),
+});
+
 const serviceRecurrenceEnum = z.enum([
   "WEEKLY",
   "BIWEEKLY",

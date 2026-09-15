@@ -24,6 +24,7 @@ import {
   UNIT_LABELS,
 } from "@/features/inventory/labels";
 import { cn } from "@/lib/utils";
+import { IngredientDetailActions } from "@/features/inventory/components/IngredientDetailActions";
 
 type Props = { params: Promise<{ ingredientId: string }> };
 
@@ -104,6 +105,14 @@ export default async function IngredientDetailPage({ params }: Props) {
         <p className="mt-1 text-sm text-muted-foreground">
           {ingredient.category ?? "Sin categoría"} · Unidad base: {unit}
         </p>
+        <div className="mt-4">
+          <IngredientDetailActions
+            ingredientId={ingredient.id}
+            ingredientName={ingredient.name}
+            unitLabel={unit}
+            showOrderCta={current < minimum}
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

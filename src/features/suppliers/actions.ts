@@ -43,6 +43,7 @@ export async function createSupplierAction(
         whatsapp: emptyToNull(data.whatsapp),
         email: emptyToNull(data.email),
         notes: emptyToNull(data.notes),
+        leadTimeDays: data.leadTimeDays ?? null,
         active: data.active,
       },
     });
@@ -95,6 +96,8 @@ export async function updateSupplierAction(
           data.whatsapp === undefined ? undefined : emptyToNull(data.whatsapp),
         email: data.email === undefined ? undefined : emptyToNull(data.email),
         notes: data.notes === undefined ? undefined : emptyToNull(data.notes),
+        leadTimeDays:
+          data.leadTimeDays === undefined ? undefined : data.leadTimeDays,
         active: data.active,
       },
     });

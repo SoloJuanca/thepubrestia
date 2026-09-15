@@ -231,6 +231,82 @@ export async function deactivateEmployeeAction(
   return updateEmployeeAction({ id, active: false });
 }
 
+export async function createTimeOffAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const { user } = await assertPermission("employees", "update");
+    const { createTimeOffSchema } = await import("@/validations/ops");
+    const data = createTimeOffSchema.parse(raw);
+
+    const row = await prisma.employeeTimeOff.create({
+      data: {
+        employeeId: data.employeeProfileId,
+        locationId: data.locationId,
+        type: data.type,
+        date: new Date(data.date),
+        notes: data.notes ?? null,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "TIME_OFF_CREATE",
+        entity: "EmployeeTimeOff",
+        entityId: row.id,
+        after: data,
+      },
+    });
+
+    const profile = await prisma.employeeProfile.findUnique({
+      where: { id: data.employeeProfileId },
+    });
+    if (profile) revalidatePath(`/employees/${profile.userId}`);
+    return { ok: true, message: "Día registrado." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    console.error(error);
+    return { ok: false, error: "No se pudo registrar el día." };
+  }
+}
+
+export async function deleteTimeOffAction(id: string): Promise<ActionResult> {
+  try {
+    const { user } = await assertPermission("employees", "update");
+    const existing = await prisma.employeeTimeOff.findUnique({
+      where: { id },
+      include: { employee: true },
+    });
+    if (!existing) return { ok: false, error: "Registro no encontrado." };
+
+    await prisma.employeeTimeOff.delete({ where: { id } });
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "TIME_OFF_DELETE",
+        entity: "EmployeeTimeOff",
+        entityId: id,
+        before: {
+          type: existing.type,
+          date: existing.date.toISOString(),
+        },
+      },
+    });
+
+    revalidatePath(`/employees/${existing.employee.userId}`);
+    return { ok: true, message: "Registro eliminado." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    console.error(error);
+    return { ok: false, error: "No se pudo eliminar." };
+  }
+}
+
 export async function listRoles() {
   return prisma.role.findMany({ orderBy: { name: "asc" } });
 }

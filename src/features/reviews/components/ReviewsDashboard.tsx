@@ -59,7 +59,7 @@ export function ReviewsDashboard({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Metric label="General" value={averages.overall} />
+        <Metric label="Calificación general" value={averages.overall} />
         <Metric label="Comida" value={averages.food} />
         <Metric label="Servicio" value={averages.service} />
         <Metric label="Ambiente" value={averages.ambience} />
@@ -80,7 +80,7 @@ export function ReviewsDashboard({
               value={orderId}
               onChange={(e) => setOrderId(e.target.value)}
             >
-              <option value="">General (sin orden)</option>
+              <option value="">Sin orden asociada</option>
               {recentOrderIds.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}

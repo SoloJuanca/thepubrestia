@@ -17,6 +17,11 @@ import {
   assertPaymentsCoverTotal,
   splitEqualAmounts,
 } from "@/lib/pos-labels";
+import {
+  resolveCheckInStatus,
+  resolveCheckOutStatus,
+} from "@/services/attendance.service";
+import { inventoryService } from "@/services/inventory.service";
 
 describe("pricing", () => {
   it("rounds money to 2 decimals", () => {
@@ -133,18 +138,53 @@ describe("RBAC", () => {
     expect(hasPermission(admin, "finance", "read")).toBe(true);
     expect(hasPermission(admin, "services", "read")).toBe(true);
   });
+
+  it("KITCHEN cannot access employees module", () => {
+    const kitchen = permissionsForRole("KITCHEN");
+    expect(hasPermission(kitchen, "employees", "read")).toBe(false);
+  });
 });
 
 describe("service recurrence", () => {
   it("computes next monthly date", () => {
-    const from = new Date(2026, 6, 10); // July 10 local
+    const from = new Date(2026, 6, 10);
     const next = computeNextServiceDate(from, "MONTHLY", 3);
-    expect(next.getMonth()).toBe(9); // October
+    expect(next.getMonth()).toBe(9);
     expect(next.getDate()).toBe(10);
   });
 });
 
-describe("attendance guard", () => {
+describe("attendance status helpers", () => {
+  it("marks late check-in past grace", () => {
+    const checkInAt = new Date(2026, 8, 14, 10, 25, 0);
+    expect(
+      resolveCheckInStatus({
+        checkInAt,
+        startTime: "10:00",
+        isDayOff: false,
+        graceMinutes: 10,
+      }),
+    ).toBe("LATE");
+    expect(
+      resolveCheckInStatus({
+        checkInAt: new Date(2026, 8, 14, 10, 5, 0),
+        startTime: "10:00",
+        isDayOff: false,
+      }),
+    ).toBe("ON_TIME");
+  });
+
+  it("marks early leave on checkout", () => {
+    expect(
+      resolveCheckOutStatus({
+        checkInStatus: "ON_TIME",
+        checkOutAt: new Date(2026, 8, 14, 16, 0, 0),
+        endTime: "18:00",
+        isDayOff: false,
+      }),
+    ).toBe("EARLY_LEAVE");
+  });
+
   it("blocks duplicate open shift message contract", () => {
     const message =
       "Ya tienes una asistencia abierta. Registra la salida primero.";
@@ -171,6 +211,24 @@ describe("purchase receive", () => {
     ).not.toThrow();
     expect(stockAfterReceive(5, 2)).toBe(7);
   });
+
+  it("allows partial receive then remaining", () => {
+    expect(() =>
+      assertReceiveQty({
+        ordered: 16,
+        alreadyReceived: 0,
+        incoming: 10,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertReceiveQty({
+        ordered: 16,
+        alreadyReceived: 10,
+        incoming: 6,
+      }),
+    ).not.toThrow();
+    expect(stockAfterReceive(4, 10)).toBe(14);
+  });
 });
 
 describe("service to expense", () => {
@@ -179,5 +237,14 @@ describe("service to expense", () => {
     const next = computeNextServiceDate(performed, "MONTHLY", 1);
     expect(next.getMonth()).toBe(1);
     expect(next.getDate()).toBe(15);
+  });
+});
+
+describe("stock suggestion", () => {
+  it("suggests purchase to reach ideal stock level", () => {
+    expect(inventoryService.suggestedPurchase(4, 8, 20)).toBe(16);
+    // Above minimum but below ideal still suggests top-up to ideal
+    expect(inventoryService.suggestedPurchase(10, 8, 20)).toBe(10);
+    expect(inventoryService.suggestedPurchase(20, 8, 20)).toBe(0);
   });
 });
