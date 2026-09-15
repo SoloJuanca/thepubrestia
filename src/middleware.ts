@@ -4,6 +4,35 @@ import type { NextRequest } from "next/server";
 
 const publicPaths = ["/login", "/verify", "/forgot-password", "/review"];
 
+/**
+ * Auth.js issues `__Secure-authjs.session-token` on HTTPS.
+ * getToken() defaults to the non-secure name unless secureCookie is true,
+ * which made production always look logged-out while local (http) worked.
+ */
+async function readSessionToken(request: NextRequest) {
+  const secret = process.env.AUTH_SECRET;
+  const secure =
+    request.nextUrl.protocol === "https:" || Boolean(process.env.VERCEL);
+
+  const token = await getToken({
+    req: request,
+    secret,
+    secureCookie: secure,
+  });
+  if (token) return token;
+
+  // Fallback when AUTH_URL was http:// and cookie was issued without prefix
+  if (secure) {
+    return getToken({
+      req: request,
+      secret,
+      secureCookie: false,
+    });
+  }
+
+  return null;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -20,10 +49,7 @@ export async function middleware(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.AUTH_SECRET,
-  });
+  const token = await readSessionToken(request);
 
   if (!token && !isPublic && pathname !== "/") {
     const url = request.nextUrl.clone();
@@ -39,7 +65,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/finance") && token) {
-    const roles = (token.roles as string[] | undefined) ?? [];
+    const roles = (token.roles as string[]) ?? [];
     const financeAllowed = roles.some((r) =>
       ["SUPER_ADMIN", "ADMIN"].includes(r),
     );
