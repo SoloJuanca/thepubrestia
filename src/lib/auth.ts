@@ -27,35 +27,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(raw) {
-        const parsed = credentialsSchema.safeParse(raw);
-        if (!parsed.success) return null;
+        try {
+          const parsed = credentialsSchema.safeParse(raw);
+          if (!parsed.success) return null;
 
-        const email = parsed.data.email.toLowerCase();
-        const user = await prisma.user.findUnique({
-          where: { email },
-          include: {
-            roles: { include: { role: true } },
-            employeeProfile: true,
-          },
-        });
+          const email = parsed.data.email.toLowerCase();
+          const user = await prisma.user.findUnique({
+            where: { email },
+            include: {
+              roles: { include: { role: true } },
+              employeeProfile: true,
+            },
+          });
 
-        if (!user || !user.active || user.type !== "EMPLOYEE") return null;
-        if (!user.passwordHash) return null;
+          if (!user || !user.active || user.type !== "EMPLOYEE") return null;
+          if (!user.passwordHash) return null;
 
-        const valid = await bcrypt.compare(
-          parsed.data.password,
-          user.passwordHash,
-        );
-        if (!valid) return null;
+          const valid = await bcrypt.compare(
+            parsed.data.password,
+            user.passwordHash,
+          );
+          if (!valid) return null;
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          type: user.type,
-          roles: user.roles.map((r) => r.role.code),
-          locationId: user.employeeProfile?.locationId ?? null,
-        };
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            type: user.type,
+            roles: user.roles.map((r) => r.role.code),
+            locationId: user.employeeProfile?.locationId ?? null,
+          };
+        } catch (error) {
+          console.error("[auth] credentials authorize failed", error);
+          return null;
+        }
       },
     }),
     ...(process.env.RESEND_API_KEY
