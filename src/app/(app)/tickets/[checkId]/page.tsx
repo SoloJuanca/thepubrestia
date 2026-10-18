@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
 import { requirePermission, checkPermission } from "@/lib/rbac";
+import { BRAND } from "@/lib/brand";
 import { paymentService } from "@/services/payment.service";
 import { TicketPageClient } from "@/features/payments/components/TicketPageClient";
 
@@ -29,16 +30,18 @@ export default async function TicketPage({ params }: Props) {
       tableId={check.order.tableId}
       canMintReview={canMintReview}
       ticket={{
-        restaurantName: check.order.location.name,
-        address: check.order.location.address,
-        phone: check.order.location.phone,
+        restaurantName: BRAND.name,
+        address: check.order.location.address ?? BRAND.address,
+        phone: check.order.location.phone ?? BRAND.phone,
+        email: BRAND.email,
+        website: BRAND.website,
         ticketNumber: check.order.ticketNumber,
         tableName: check.order.table?.name ?? null,
         waiterName:
           check.order.waiter?.name ?? check.order.waiter?.email ?? null,
         checkName: check.name,
         issuedAtLabel: format(check.closedAt ?? new Date(), "dd/MM/yyyy HH:mm"),
-        widthMm: 80,
+        widthMm: 84,
         lines: check.items.map((item) => ({
           name: item.nameSnapshot,
           quantity: item.quantity,
@@ -48,14 +51,10 @@ export default async function TicketPage({ params }: Props) {
         subtotal: Number(check.subtotal).toFixed(2),
         discountTotal: Number(check.discountTotal).toFixed(2),
         taxTotal: Number(check.taxTotal).toFixed(2),
-        tipTotal: Number(check.tipTotal).toFixed(2),
-        total: (
-          Number(check.total) + Number(check.tipTotal)
-        ).toFixed(2),
+        total: Number(check.total).toFixed(2),
         payments: check.payments.map((p) => ({
           method: p.method,
           amount: Number(p.amount).toFixed(2),
-          tipAmount: Number(p.tipAmount).toFixed(2),
         })),
       }}
     />

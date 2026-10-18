@@ -6,7 +6,11 @@ type Props = {
 
 function safeCallbackUrl(value: string | undefined): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/dashboard";
+    return "/post-login";
+  }
+  // Always resolve role home via post-login when landing from bare login
+  if (value === "/dashboard" || value === "/kitchen") {
+    return "/post-login";
   }
   return value;
 }

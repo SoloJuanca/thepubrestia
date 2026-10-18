@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
-import { requirePermission } from "@/lib/rbac";
+import { getCurrentUser, requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  INGREDIENT_KIND_LABELS,
   MOVEMENT_TYPE_LABELS,
   UNIT_LABELS,
 } from "@/features/inventory/labels";
@@ -39,6 +40,11 @@ function stockStatusLabel(
 
 export default async function IngredientDetailPage({ params }: Props) {
   await requirePermission("inventory", "read");
+  const user = await getCurrentUser();
+  const roles = user?.roles.map((r) => r.role.code) ?? [];
+  const canViewCosts = !roles.some((r) =>
+    ["KITCHEN_COOK", "KITCHEN_ASSISTANT", "KITCHEN"].includes(r),
+  );
   const { ingredientId } = await params;
 
   const ingredient = await prisma.ingredient.findUnique({
@@ -103,7 +109,11 @@ export default async function IngredientDetailPage({ params }: Props) {
           ) : null}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
+          {INGREDIENT_KIND_LABELS[ingredient.kind] ?? ingredient.kind}
+          {" · "}
           {ingredient.category ?? "Sin categoría"} · Unidad base: {unit}
+          {ingredient.packSize ? ` · pack ${ingredient.packSize}` : ""}
+          {ingredient.storageNote ? ` · ${ingredient.storageNote}` : ""}
         </p>
         <div className="mt-4">
           <IngredientDetailActions
@@ -126,10 +136,12 @@ export default async function IngredientDetailPage({ params }: Props) {
           title="Stock ideal"
           value={ideal != null ? `${ideal} ${unit}` : "—"}
         />
-        <MetricCard
-          title="Costo promedio"
-          value={`$${Number(ingredient.averageCost).toFixed(4)}`}
-        />
+        {canViewCosts ? (
+          <MetricCard
+            title="Costo promedio"
+            value={`$${Number(ingredient.averageCost).toFixed(4)}`}
+          />
+        ) : null}
       </div>
 
       <Card>

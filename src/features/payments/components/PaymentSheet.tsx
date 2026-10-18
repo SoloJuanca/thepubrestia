@@ -19,7 +19,6 @@ type PaymentDraft = {
   key: string;
   method: "CASH" | "CARD" | "TRANSFER";
   amount: string;
-  tipAmount: string;
   reference: string;
 };
 
@@ -52,17 +51,12 @@ export function PaymentSheet({
       key: crypto.randomUUID(),
       method: "CASH",
       amount: total,
-      tipAmount: "0",
       reference: "",
     },
   ]);
 
   const paid = useMemo(
     () => lines.reduce((s, l) => s + (Number(l.amount) || 0), 0),
-    [lines],
-  );
-  const tips = useMemo(
-    () => lines.reduce((s, l) => s + (Number(l.tipAmount) || 0), 0),
     [lines],
   );
   const remaining = Math.max(0, Math.round((totalNum - paid) * 100) / 100);
@@ -82,7 +76,7 @@ export function PaymentSheet({
         payments: lines.map((l) => ({
           method: l.method,
           amount: Number(l.amount) || 0,
-          tipAmount: Number(l.tipAmount) || 0,
+          tipAmount: 0,
           reference: l.reference || null,
         })),
       });
@@ -166,45 +160,24 @@ export function PaymentSheet({
                   </option>
                 ))}
               </select>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label>Monto</Label>
-                  <Input
-                    className="min-h-11"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={line.amount}
-                    onChange={(e) =>
-                      setLines((prev) =>
-                        prev.map((l) =>
-                          l.key === line.key
-                            ? { ...l, amount: e.target.value }
-                            : l,
-                        ),
-                      )
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Propina</Label>
-                  <Input
-                    className="min-h-11"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={line.tipAmount}
-                    onChange={(e) =>
-                      setLines((prev) =>
-                        prev.map((l) =>
-                          l.key === line.key
-                            ? { ...l, tipAmount: e.target.value }
-                            : l,
-                        ),
-                      )
-                    }
-                  />
-                </div>
+              <div className="space-y-1">
+                <Label>Monto</Label>
+                <Input
+                  className="min-h-11"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={line.amount}
+                  onChange={(e) =>
+                    setLines((prev) =>
+                      prev.map((l) =>
+                        l.key === line.key
+                          ? { ...l, amount: e.target.value }
+                          : l,
+                      ),
+                    )
+                  }
+                />
               </div>
               <Input
                 placeholder="Referencia (opcional)"
@@ -243,7 +216,6 @@ export function PaymentSheet({
                   key: crypto.randomUUID(),
                   method: "CARD",
                   amount: remaining > 0 ? remaining.toFixed(2) : "0",
-                  tipAmount: "0",
                   reference: "",
                 },
               ])
@@ -256,10 +228,6 @@ export function PaymentSheet({
             <div className="flex justify-between">
               <span>Pagado</span>
               <span>${paid.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Propinas</span>
-              <span>${tips.toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-medium">
               <span>Restante</span>

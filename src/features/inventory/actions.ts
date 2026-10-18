@@ -4,9 +4,14 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { assertPermission, AuthorizationError } from "@/lib/rbac";
 import { inventoryService } from "@/services/inventory.service";
+import { productionService } from "@/services/production.service";
 import {
   adjustStockSchema,
+  bulkUpdateIngredientsSchema,
   createIngredientSchema,
+  deleteIngredientsSchema,
+  runProductionBatchSchema,
+  savePrepRecipeSchema,
   saveRecipeSchema,
   updateIngredientSchema,
   wasteSchema,
@@ -40,7 +45,10 @@ export async function createIngredientAction(
           locationId: data.locationId,
           name: data.name.trim(),
           category: emptyToNull(data.category),
+          kind: data.kind,
           baseUnit: data.baseUnit,
+          packSize: data.packSize ?? null,
+          storageNote: emptyToNull(data.storageNote),
           currentStock: 0,
           minimumStock: data.minimumStock,
           targetStock: data.targetStock ?? null,
@@ -115,7 +123,14 @@ export async function updateIngredientAction(
           data.category === undefined
             ? undefined
             : emptyToNull(data.category),
+        kind: data.kind,
         baseUnit: data.baseUnit,
+        packSize:
+          data.packSize === undefined ? undefined : data.packSize,
+        storageNote:
+          data.storageNote === undefined
+            ? undefined
+            : emptyToNull(data.storageNote),
         minimumStock: data.minimumStock,
         targetStock:
           data.targetStock === undefined ? undefined : data.targetStock,
@@ -155,6 +170,279 @@ export async function updateIngredientAction(
     }
     console.error(error);
     return { ok: false, error: "No se pudo actualizar el ingrediente." };
+  }
+}
+
+export async function bulkUpdateIngredientsAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const data = bulkUpdateIngredientsSchema.parse(raw);
+    const needsMeta =
+      data.applySupplier ||
+      data.applyKind ||
+      data.applyCategory ||
+      data.applyMinimum ||
+      data.applyTarget ||
+      data.applyActive;
+    const needsStock = data.applyStock;
+
+    if (!needsMeta && !needsStock) {
+      return { ok: false, error: "Marca al menos un campo a modificar." };
+    }
+
+    let userId: string | null = null;
+    if (needsMeta) {
+      const { user } = await assertPermission("inventory", "update");
+      userId = user.id;
+    }
+    if (needsStock) {
+      const { user } = await assertPermission("inventory", "adjust");
+      userId = user.id;
+    }
+
+    const found = await prisma.ingredient.findMany({
+      where: { id: { in: data.ids } },
+      select: { id: true },
+    });
+    if (found.length !== data.ids.length) {
+      return { ok: false, error: "Uno o más ingredientes no existen." };
+    }
+
+    if (needsMeta) {
+      const patch: {
+        preferredSupplierId?: string | null;
+        kind?: "RAW" | "PREP" | "FROZEN" | "PACKAGED";
+        category?: string | null;
+        minimumStock?: number;
+        targetStock?: number | null;
+        active?: boolean;
+      } = {};
+      if (data.applySupplier) {
+        patch.preferredSupplierId = emptyToNull(data.preferredSupplierId);
+      }
+      if (data.applyKind && data.kind) patch.kind = data.kind;
+      if (data.applyCategory) {
+        patch.category = emptyToNull(data.category);
+      }
+      if (data.applyMinimum && data.minimumStock !== undefined) {
+        patch.minimumStock = data.minimumStock;
+      }
+      if (data.applyTarget) {
+        patch.targetStock =
+          data.targetStock === undefined || data.targetStock === null
+            ? null
+            : data.targetStock;
+      }
+      if (data.applyActive && data.active !== undefined) {
+        patch.active = data.active;
+      }
+
+      await prisma.ingredient.updateMany({
+        where: { id: { in: data.ids } },
+        data: patch,
+      });
+    }
+
+    if (needsStock) {
+      if (data.stockQuantity === undefined) {
+        return { ok: false, error: "Indica la cantidad de stock." };
+      }
+      const mode = data.stockMode ?? "delta";
+      if (mode === "delta" && data.stockQuantity === 0) {
+        return { ok: false, error: "La cantidad delta no puede ser 0." };
+      }
+      for (const id of data.ids) {
+        try {
+          if (mode === "absolute") {
+            await inventoryService.setStockAbsolute({
+              ingredientId: id,
+              newStock: data.stockQuantity,
+              employeeId: userId,
+              notes: data.stockNotes ?? "Ajuste masivo",
+            });
+          } else {
+            await inventoryService.applyStockChange({
+              ingredientId: id,
+              quantityDelta: data.stockQuantity,
+              movementType: "ADJUSTMENT",
+              referenceType: "ADJUSTMENT",
+              employeeId: userId,
+              notes: data.stockNotes ?? "Ajuste masivo",
+            });
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "";
+          // Skip no-op absolute sets so the rest of the batch continues.
+          if (msg.includes("ya tiene ese valor")) continue;
+          throw err;
+        }
+      }
+    }
+
+    if (userId) {
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action: "INGREDIENT_BULK_UPDATE",
+          entity: "Ingredient",
+          entityId: data.ids[0],
+          after: {
+            count: data.ids.length,
+            ids: data.ids,
+            apply: {
+              supplier: data.applySupplier,
+              kind: data.applyKind,
+              category: data.applyCategory,
+              minimum: data.applyMinimum,
+              target: data.applyTarget,
+              active: data.applyActive,
+              stock: data.applyStock,
+            },
+          },
+        },
+      });
+    }
+
+    revalidateInventory();
+    return {
+      ok: true,
+      message: `Actualizados ${data.ids.length} ingredientes.`,
+    };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    console.error(error);
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar en lote.",
+    };
+  }
+}
+
+async function removeIngredientRecord(
+  id: string,
+  userId: string,
+): Promise<"hard" | "soft"> {
+  const [
+    movements,
+    waste,
+    purchases,
+    recipeItems,
+    prepInputs,
+    productionOut,
+    productionIn,
+    supplierProducts,
+  ] = await Promise.all([
+    prisma.inventoryMovement.count({ where: { ingredientId: id } }),
+    prisma.wasteRecord.count({ where: { ingredientId: id } }),
+    prisma.purchaseOrderItem.count({ where: { ingredientId: id } }),
+    prisma.recipeItem.count({ where: { ingredientId: id } }),
+    prisma.prepRecipeItem.count({ where: { ingredientId: id } }),
+    prisma.productionBatch.count({ where: { outputIngredientId: id } }),
+    prisma.productionBatchInput.count({ where: { ingredientId: id } }),
+    prisma.supplierProduct.count({ where: { ingredientId: id } }),
+  ]);
+
+  const hasHistory =
+    movements +
+      waste +
+      purchases +
+      recipeItems +
+      prepInputs +
+      productionOut +
+      productionIn >
+    0;
+
+  if (hasHistory) {
+    await prisma.ingredient.update({
+      where: { id },
+      data: { active: false },
+    });
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: "INGREDIENT_SOFT_DELETE",
+        entity: "Ingredient",
+        entityId: id,
+        after: { active: false },
+      },
+    });
+    return "soft";
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (supplierProducts > 0) {
+      await tx.supplierProduct.deleteMany({ where: { ingredientId: id } });
+    }
+    // PrepRecipe as output cascades when ingredient is deleted.
+    await tx.ingredient.delete({ where: { id } });
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId,
+      action: "INGREDIENT_DELETE",
+      entity: "Ingredient",
+      entityId: id,
+    },
+  });
+  return "hard";
+}
+
+export async function deleteIngredientsAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const { user } = await assertPermission("inventory", "create");
+    const data = deleteIngredientsSchema.parse(raw);
+
+    const found = await prisma.ingredient.findMany({
+      where: { id: { in: data.ids } },
+      select: { id: true, name: true, active: true },
+    });
+    if (found.length === 0) {
+      return { ok: false, error: "No se encontraron ingredientes." };
+    }
+
+    let soft = 0;
+    let hard = 0;
+    for (const row of found) {
+      const mode = await removeIngredientRecord(row.id, user.id);
+      if (mode === "soft") soft += 1;
+      else hard += 1;
+    }
+
+    revalidateInventory();
+    const parts: string[] = [];
+    if (hard > 0) parts.push(`${hard} eliminados`);
+    if (soft > 0) {
+      parts.push(
+        `${soft} desactivados (tienen historial o recetas)`,
+      );
+    }
+    return {
+      ok: true,
+      message: parts.length
+        ? parts.join(" · ")
+        : "Sin cambios.",
+    };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    console.error(error);
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar.",
+    };
   }
 }
 
@@ -249,7 +537,7 @@ export async function recordWasteAction(raw: unknown): Promise<ActionResult> {
 
 export async function saveRecipeAction(raw: unknown): Promise<ActionResult> {
   try {
-    const { user } = await assertPermission("inventory", "update");
+    const { user } = await assertPermission("recipes", "update");
     const data = saveRecipeSchema.parse(raw);
 
     const menuItem = await prisma.menuItem.findUnique({
@@ -276,6 +564,14 @@ export async function saveRecipeAction(raw: unknown): Promise<ActionResult> {
       };
     }
 
+    const costById = new Map(
+      ingredients.map((i) => [i.id, Number(i.averageCost)]),
+    );
+    const estimatedCost = data.items.reduce(
+      (sum, item) => sum + item.quantity * (costById.get(item.ingredientId) ?? 0),
+      0,
+    );
+
     await prisma.$transaction(async (tx) => {
       await tx.recipeItem.deleteMany({ where: { menuItemId: data.menuItemId } });
       if (data.items.length > 0) {
@@ -288,6 +584,10 @@ export async function saveRecipeAction(raw: unknown): Promise<ActionResult> {
           })),
         });
       }
+      await tx.menuItem.update({
+        where: { id: data.menuItemId },
+        data: { estimatedCost },
+      });
     });
 
     await prisma.auditLog.create({
@@ -296,7 +596,7 @@ export async function saveRecipeAction(raw: unknown): Promise<ActionResult> {
         action: "RECIPE_UPDATE",
         entity: "MenuItem",
         entityId: data.menuItemId,
-        after: { items: data.items },
+        after: { items: data.items, estimatedCost },
       },
     });
 
@@ -308,5 +608,81 @@ export async function saveRecipeAction(raw: unknown): Promise<ActionResult> {
     }
     console.error(error);
     return { ok: false, error: "No se pudo guardar la receta." };
+  }
+}
+
+export async function runProductionBatchAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    const { user } = await assertPermission("inventory", "adjust");
+    const data = runProductionBatchSchema.parse(raw);
+    const batch = await productionService.runBatch({
+      locationId: data.locationId,
+      outputIngredientId: data.outputIngredientId,
+      quantityProduced: data.quantityProduced,
+      batchMultiplier: data.batchMultiplier,
+      notes: data.notes,
+      employeeId: user.id,
+    });
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "PRODUCTION_BATCH",
+        entity: "ProductionBatch",
+        entityId: batch.id,
+        after: {
+          output: batch.outputIngredientId,
+          produced: Number(batch.quantityProduced),
+          yield: Number(batch.yieldPercent),
+        },
+      },
+    });
+    revalidateInventory();
+    return {
+      ok: true,
+      message: `Producción registrada · rendimiento ${Number(batch.yieldPercent)}%`,
+      id: batch.id,
+    };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    console.error(error);
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo registrar la producción.",
+    };
+  }
+}
+
+export async function savePrepRecipeAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    await assertPermission("recipes", "update");
+    const data = savePrepRecipeSchema.parse(raw);
+    const recipe = await productionService.upsertPrepRecipe(data);
+    revalidateInventory();
+    return {
+      ok: true,
+      message: "Receta de producción guardada.",
+      id: recipe.id,
+    };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    console.error(error);
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la receta de producción.",
+    };
   }
 }

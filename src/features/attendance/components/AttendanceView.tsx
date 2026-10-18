@@ -50,6 +50,8 @@ type Props = {
   hasOpenAttendance: boolean;
   canCheck: boolean;
   canCorrect: boolean;
+  /** Kitchen staff must use venue QR instead of manual buttons */
+  qrOnlyCheckIn?: boolean;
   todayLabel: string;
   rows: AttendanceRow[];
 };
@@ -68,6 +70,7 @@ export function AttendanceView({
   hasOpenAttendance,
   canCheck,
   canCorrect,
+  qrOnlyCheckIn = false,
   todayLabel,
   rows,
 }: Props) {
@@ -124,7 +127,19 @@ export function AttendanceView({
         </p>
       </div>
 
-      {canCheck ? (
+      {canCheck && qrOnlyCheckIn ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Marca con el QR del local</CardTitle>
+            <CardDescription>
+              Escanea el código QR en el local (entrada y salida se alternan).
+              No hay botones manuales para cocina.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : null}
+
+      {canCheck && !qrOnlyCheckIn ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <Button
             size="lg"
@@ -156,11 +171,13 @@ export function AttendanceView({
             Registrar salida
           </Button>
         </div>
-      ) : (
+      ) : null}
+
+      {!canCheck ? (
         <p className="text-sm text-muted-foreground">
           No tienes permiso para registrar asistencia.
         </p>
-      )}
+      ) : null}
 
       {hasOpenAttendance ? (
         <p className="text-sm text-[var(--pub-blue-dark)]">

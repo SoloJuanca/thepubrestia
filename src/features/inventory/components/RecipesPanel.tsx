@@ -19,6 +19,8 @@ export type RecipeMenuItem = {
   id: string;
   name: string;
   categoryName: string;
+  price: string;
+  estimatedCost: string;
   items: Array<{
     ingredientId: string;
     ingredientName: string;
@@ -31,6 +33,7 @@ type IngredientOption = {
   id: string;
   name: string;
   baseUnit: string;
+  averageCost: string;
 };
 
 type DraftLine = {
@@ -43,9 +46,16 @@ type DraftLine = {
 type Props = {
   menuItems: RecipeMenuItem[];
   ingredients: IngredientOption[];
+  canEdit?: boolean;
+  canViewCosts?: boolean;
 };
 
-export function RecipesPanel({ menuItems, ingredients }: Props) {
+export function RecipesPanel({
+  menuItems,
+  ingredients,
+  canEdit = true,
+  canViewCosts = true,
+}: Props) {
   const [selectedId, setSelectedId] = useState(menuItems[0]?.id ?? "");
   const selected = useMemo(
     () => menuItems.find((m) => m.id === selectedId) ?? null,
@@ -60,6 +70,21 @@ export function RecipesPanel({ menuItems, ingredients }: Props) {
     })),
   );
   const [pending, startTransition] = useTransition();
+
+  const recipeCost = useMemo(() => {
+    const costById = new Map(
+      ingredients.map((i) => [i.id, Number(i.averageCost) || 0]),
+    );
+    return lines.reduce(
+      (sum, line) =>
+        sum + (Number(line.quantity) || 0) * (costById.get(line.ingredientId) ?? 0),
+      0,
+    );
+  }, [lines, ingredients]);
+
+  const price = Number(selected?.price ?? 0);
+  const margin = price - recipeCost;
+  const marginPct = price > 0 ? (margin / price) * 100 : 0;
 
   function loadItem(id: string) {
     setSelectedId(id);
@@ -76,7 +101,7 @@ export function RecipesPanel({ menuItems, ingredients }: Props) {
 
   function onSave(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedId) return;
+    if (!selectedId || !canEdit) return;
     startTransition(async () => {
       const result = await saveRecipeAction({
         menuItemId: selectedId,
@@ -120,7 +145,9 @@ export function RecipesPanel({ menuItems, ingredients }: Props) {
             >
               <span className="block">{item.name}</span>
               <span className="text-xs text-muted-foreground">
-                {item.categoryName} · {item.items.length} insumos
+                {item.categoryName}
+                {canViewCosts ? ` · $${item.price}` : ""} ·{" "}
+                {item.items.length} insumos
               </span>
             </button>
           ))}
@@ -133,11 +160,39 @@ export function RecipesPanel({ menuItems, ingredients }: Props) {
             Receta — {selected?.name ?? "—"}
           </CardTitle>
           <CardDescription>
-            Al vender, el consumo se calculará desde aquí (Fase 4/5).
+            {canViewCosts
+              ? "Costo = Σ (qty × costo promedio). Al cobrar se descuenta stock."
+              : "Insumos por platillo. Al cobrar se descuenta stock."}
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {canViewCosts ? (
+            <div className="mb-4 grid gap-2 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Precio venta</p>
+                <p className="font-medium">${price.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Costo receta</p>
+                <p className="font-medium">${recipeCost.toFixed(2)}</p>
+                {selected &&
+                Math.abs(recipeCost - Number(selected.estimatedCost)) >
+                  0.01 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Guardado: ${Number(selected.estimatedCost).toFixed(2)}
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Margen</p>
+                <p className="font-medium">
+                  ${margin.toFixed(2)} ({marginPct.toFixed(1)}%)
+                </p>
+              </div>
+            </div>
+          ) : null}
           <form onSubmit={onSave} className="space-y-4">
+            <fieldset disabled={!canEdit} className="space-y-4 border-0 p-0">
             {lines.map((line) => (
               <div
                 key={line.key}
@@ -230,28 +285,35 @@ export function RecipesPanel({ menuItems, ingredients }: Props) {
               </div>
             ))}
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  setLines((prev) => [
-                    ...prev,
-                    {
-                      key: crypto.randomUUID(),
-                      ingredientId: ingredients[0]?.id ?? "",
-                      quantity: "1",
-                      unit: ingredients[0]?.baseUnit ?? "UNIT",
-                    },
-                  ])
-                }
-              >
-                Agregar insumo
-              </Button>
-              <Button type="submit" disabled={pending || !selectedId}>
-                {pending ? "Guardando…" : "Guardar receta"}
-              </Button>
-            </div>
+            {canEdit ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setLines((prev) => [
+                      ...prev,
+                      {
+                        key: crypto.randomUUID(),
+                        ingredientId: ingredients[0]?.id ?? "",
+                        quantity: "1",
+                        unit: ingredients[0]?.baseUnit ?? "UNIT",
+                      },
+                    ])
+                  }
+                >
+                  Agregar insumo
+                </Button>
+                <Button type="submit" disabled={pending || !selectedId}>
+                  {pending ? "Guardando…" : "Guardar receta"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Solo el encargado de cocina puede modificar recetas.
+              </p>
+            )}
+            </fieldset>
           </form>
         </CardContent>
       </Card>

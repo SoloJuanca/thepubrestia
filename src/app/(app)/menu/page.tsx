@@ -59,6 +59,7 @@ export default async function MenuPage() {
         items={items.map((item) => ({
           id: item.id,
           name: item.name,
+          categoryId: item.categoryId,
           categoryName: item.category.name,
           sku: item.sku,
           price: Number(item.price).toFixed(2),

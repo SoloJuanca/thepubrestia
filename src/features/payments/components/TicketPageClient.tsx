@@ -25,7 +25,7 @@ export function TicketPageClient({
   tableId,
   canMintReview,
 }: Props) {
-  const [widthMm, setWidthMm] = useState<58 | 80>(ticket.widthMm);
+  const [widthMm, setWidthMm] = useState<58 | 84>(84);
   const [pending, startTransition] = useTransition();
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
 
@@ -50,12 +50,12 @@ export function TicketPageClient({
       subtotal: Number(ticket.subtotal),
       discountTotal: Number(ticket.discountTotal),
       taxTotal: Number(ticket.taxTotal),
-      tipTotal: Number(ticket.tipTotal),
+      tipTotal: 0,
       total: Number(ticket.total),
       payments: ticket.payments.map((p) => ({
         method: p.method,
         amount: Number(p.amount),
-        tipAmount: Number(p.tipAmount),
+        tipAmount: 0,
       })),
     });
     toast.message(result.message);
@@ -75,10 +75,10 @@ export function TicketPageClient({
           <select
             className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
             value={widthMm}
-            onChange={(e) => setWidthMm(Number(e.target.value) as 58 | 80)}
+            onChange={(e) => setWidthMm(Number(e.target.value) as 58 | 84)}
           >
             <option value={58}>58 mm</option>
-            <option value={80}>80 mm</option>
+            <option value={84}>84 mm</option>
           </select>
           <Button onClick={onPrint}>Imprimir</Button>
           {canMintReview ? (

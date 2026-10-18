@@ -34,6 +34,7 @@ import {
   createTimeOffAction,
   deleteTimeOffAction,
 } from "@/features/employees/actions";
+import { AdminResetPasswordForm } from "@/features/auth/components/AdminResetPasswordForm";
 
 type ScheduleDay = {
   weekday: Weekday;
@@ -72,6 +73,7 @@ type Props = {
     hireDate: string | null;
   };
   roles: Array<{ code: RoleCode; name: string }>;
+  canResetPassword?: boolean;
   schedule: ScheduleDay[];
   compensation: {
     type: CompensationType;
@@ -113,6 +115,7 @@ const TABS = [
 export function EmployeeProfileView({
   employee,
   roles,
+  canResetPassword = false,
   schedule: initialSchedule,
   compensation: initialComp,
   attendance,
@@ -277,6 +280,23 @@ export function EmployeeProfileView({
                 Guardar perfil
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {tab === "Perfil" && canResetPassword ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Contraseña</CardTitle>
+            <CardDescription>
+              Reinicio administrativo (el empleado puede cambiarla después)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AdminResetPasswordForm
+              userId={employee.id}
+              email={employee.email}
+            />
           </CardContent>
         </Card>
       ) : null}

@@ -15,7 +15,7 @@ const prisma = new PrismaClient();
 const DEMO_PASSWORD = "Password123!";
 
 async function main() {
-  console.log("Seeding The Pub GameStore...");
+  console.log("Seeding The Pub Game Store...");
 
   // Permissions
   const pairs = allPermissionPairs();
@@ -52,7 +52,26 @@ async function main() {
       },
       { code: "WAITER", name: "Mesero", description: "POS y servicio" },
       { code: "CASHIER", name: "Cajero", description: "Cobros y cierres" },
-      { code: "KITCHEN", name: "Cocina", description: "Cola de preparación" },
+      {
+        code: "KITCHEN",
+        name: "Cocina (legacy)",
+        description: "Alias legacy → usar Cocinero",
+      },
+      {
+        code: "KITCHEN_LEAD",
+        name: "Encargado de cocina",
+        description: "Cola, inventario prep, editar recetas e insumos",
+      },
+      {
+        code: "KITCHEN_COOK",
+        name: "Cocinero",
+        description: "Cola, inventario de preparación, ver recetas",
+      },
+      {
+        code: "KITCHEN_ASSISTANT",
+        name: "Auxiliar de cocina",
+        description: "Cola de órdenes, etapas y asistencia QR",
+      },
       {
         code: "INVENTORY",
         name: "Inventario",
@@ -92,14 +111,18 @@ async function main() {
     where: { id: "seed-location-main" },
     create: {
       id: "seed-location-main",
-      name: "The Pub GameStore",
-      address: "Av. Principal 123, Ciudad",
-      phone: "+52 55 0000 0000",
+      name: "The Pub Game Store Alena Sur",
+      address:
+        "León Guzmán 1615, 39, Nuevo Repueblo, 64700, Monterrey, Nuevo León, México",
+      phone: "+52 871 153 4033",
       timezone: "America/Mexico_City",
       active: true,
     },
     update: {
-      name: "The Pub GameStore",
+      name: "The Pub Game Store Alena Sur",
+      address:
+        "León Guzmán 1615, 39, Nuevo Repueblo, 64700, Monterrey, Nuevo León, México",
+      phone: "+52 871 153 4033",
       active: true,
     },
   });
@@ -120,7 +143,26 @@ async function main() {
     { email: "manager@thepub.local", name: "Manager Demo", role: "MANAGER" },
     { email: "waiter@thepub.local", name: "Mesero Demo", role: "WAITER" },
     { email: "cashier@thepub.local", name: "Cajero Demo", role: "CASHIER" },
-    { email: "kitchen@thepub.local", name: "Cocina Demo", role: "KITCHEN" },
+    {
+      email: "kitchen@thepub.local",
+      name: "Encargado Cocina",
+      role: "KITCHEN_LEAD",
+    },
+    {
+      email: "kitchen.lead@thepub.local",
+      name: "Encargado Cocina 2",
+      role: "KITCHEN_LEAD",
+    },
+    {
+      email: "kitchen.cook@thepub.local",
+      name: "Cocinero Demo",
+      role: "KITCHEN_COOK",
+    },
+    {
+      email: "kitchen.aux@thepub.local",
+      name: "Auxiliar Cocina",
+      role: "KITCHEN_ASSISTANT",
+    },
     {
       email: "inventory@thepub.local",
       name: "Inventario Demo",
@@ -159,6 +201,10 @@ async function main() {
       },
     });
 
+    // Single role per demo employee (drop legacy KITCHEN, etc.)
+    await prisma.userRole.deleteMany({
+      where: { userId: user.id, roleId: { not: role.id } },
+    });
     await prisma.userRole.upsert({
       where: { userId_roleId: { userId: user.id, roleId: role.id } },
       create: { userId: user.id, roleId: role.id },

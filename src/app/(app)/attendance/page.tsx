@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { requirePermission, checkPermission } from "@/lib/rbac";
+import { isKitchenRole } from "@/lib/permissions";
 import { attendanceService } from "@/services/attendance.service";
 import { AttendanceView } from "@/features/attendance/components/AttendanceView";
 
@@ -8,6 +9,7 @@ export default async function AttendancePage() {
   const { user } = await requirePermission("attendance", "read");
   const canCheck = await checkPermission("attendance", "create");
   const canCorrect = await checkPermission("attendance", "update");
+  const qrOnlyCheckIn = isKitchenRole(user.roles.map((r) => r.role.code));
   const profile = user.employeeProfile;
 
   if (!profile) {
@@ -29,6 +31,7 @@ export default async function AttendancePage() {
       hasOpenAttendance={!!open}
       canCheck={canCheck}
       canCorrect={canCorrect}
+      qrOnlyCheckIn={qrOnlyCheckIn}
       todayLabel={format(new Date(), "EEEE d MMM yyyy", { locale: es })}
       rows={todayRows.map((r) => ({
         id: r.id,

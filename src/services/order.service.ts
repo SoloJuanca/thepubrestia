@@ -327,17 +327,28 @@ export class OrderService {
         throw new Error("Cuenta inválida.");
       }
 
-      const result = await tx.orderItem.updateMany({
+      // Only items that need kitchen prep (skip packaged beverages, etc.)
+      const openItems = await tx.orderItem.findMany({
         where: { checkId: params.checkId, status: "OPEN" },
+        include: { menuItem: { select: { requiresPrep: true } } },
+      });
+      const prepIds = openItems
+        .filter((item) => item.menuItem?.requiresPrep !== false)
+        .map((item) => item.id);
+
+      if (prepIds.length === 0) {
+        throw new Error(
+          "No hay productos de cocina para enviar (solo bebidas/empaquetados).",
+        );
+      }
+
+      const result = await tx.orderItem.updateMany({
+        where: { id: { in: prepIds } },
         data: {
           status: "SENT_TO_KITCHEN",
           sentToKitchenAt: new Date(),
         },
       });
-
-      if (result.count === 0) {
-        throw new Error("No hay productos nuevos para enviar.");
-      }
 
       if (check.order.status === "OPEN") {
         await tx.order.update({

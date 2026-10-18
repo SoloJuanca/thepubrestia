@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { RoleCode, Weekday } from "@prisma/client";
-import { requirePermission } from "@/lib/rbac";
+import { checkPermission, requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { employeeOpsService } from "@/services/employee-ops.service";
 import { EmployeeProfileView } from "@/features/employees/components/EmployeeProfileView";
@@ -66,6 +66,8 @@ export default async function EmployeeDetailPage({ params }: Props) {
         })
       : employeeOpsService.defaultSchedule();
 
+  const canResetPassword = await checkPermission("employees", "update");
+
   return (
     <EmployeeProfileView
       employee={{
@@ -87,6 +89,7 @@ export default async function EmployeeDetailPage({ params }: Props) {
         code: r.code as RoleCode,
         name: r.name,
       }))}
+      canResetPassword={canResetPassword}
       schedule={schedule}
       compensation={
         profile.compensation

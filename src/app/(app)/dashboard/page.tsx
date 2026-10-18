@@ -1,22 +1,24 @@
-import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/prisma";
-import { requireUser, checkPermission } from "@/lib/rbac";
+import { requireUser, flattenPermissions } from "@/lib/rbac";
+import { hasPermission } from "@/lib/permissions";
 import { inventoryService } from "@/services/inventory.service";
-import { purchaseOrderService, weekdayToday } from "@/services/purchase-order.service";
-import { WEEKDAY_LABELS } from "@/features/purchases/labels";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { purchaseOrderService } from "@/services/purchase-order.service";
+import {
+  hubPathsForPersona,
+  resolveRolePersona,
+  type RolePersona,
+} from "@/lib/role-home";
+import {
+  RoleHomeView,
+  type HomeAttention,
+  type HomeMetric,
+} from "@/features/home/components/RoleHomeView";
 
 export default async function DashboardPage() {
-  await requireUser();
+  const user = await requireUser();
+  const roles = user.roles.map((r) => r.role.code);
+  const persona = resolveRolePersona(roles);
+  const permissions = flattenPermissions(user);
 
   const location = await prisma.location.findFirst({
     where: { active: true },
@@ -26,19 +28,36 @@ export default async function DashboardPage() {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
+  const needFloor =
+    persona === "waiter" ||
+    persona === "cashier" ||
+    persona === "manager" ||
+    persona === "admin";
+  const needSales = persona === "manager" || persona === "admin" || persona === "cashier";
+  const needStock =
+    persona === "inventory" ||
+    persona === "manager" ||
+    persona === "admin";
+  const needPurchases =
+    persona === "inventory" ||
+    persona === "manager" ||
+    persona === "admin";
+  const needServices = persona === "manager" || persona === "admin";
+  const needAttendanceAlert = persona === "manager" || persona === "admin";
+
   const [
     tablesOccupied,
     tablesTotal,
+    tablesAwaiting,
     salesToday,
     peopleToday,
     alerts,
     openPOs,
     dueSuppliers,
     lateToday,
-    upcomingServices,
     overdueServices,
   ] = await Promise.all([
-    location
+    needFloor && location
       ? prisma.restaurantTable.count({
           where: {
             locationId: location.id,
@@ -46,13 +65,22 @@ export default async function DashboardPage() {
             status: { in: ["OCCUPIED", "AWAITING_PAYMENT"] },
           },
         })
-      : 0,
-    location
+      : Promise.resolve(0),
+    needFloor && location
       ? prisma.restaurantTable.count({
           where: { locationId: location.id, active: true },
         })
-      : 0,
-    location
+      : Promise.resolve(0),
+    needFloor && location
+      ? prisma.restaurantTable.count({
+          where: {
+            locationId: location.id,
+            active: true,
+            status: "AWAITING_PAYMENT",
+          },
+        })
+      : Promise.resolve(0),
+    needSales && location
       ? prisma.check
           .aggregate({
             where: {
@@ -63,28 +91,34 @@ export default async function DashboardPage() {
             _sum: { total: true },
           })
           .then((r) => Number(r._sum.total ?? 0))
-      : 0,
-    location
-      ? prisma.order.aggregate({
-          where: {
-            locationId: location.id,
-            openedAt: { gte: start },
-            status: { not: "CANCELLED" },
-          },
-          _sum: { partySize: true },
-        }).then((r) => r._sum.partySize ?? 0)
-      : 0,
-    location ? inventoryService.getStockAlerts(location.id) : null,
-    location
+      : Promise.resolve(0),
+    needFloor && location
+      ? prisma.order
+          .aggregate({
+            where: {
+              locationId: location.id,
+              openedAt: { gte: start },
+              status: { not: "CANCELLED" },
+            },
+            _sum: { partySize: true },
+          })
+          .then((r) => r._sum.partySize ?? 0)
+      : Promise.resolve(0),
+    needStock && location
+      ? inventoryService.getStockAlerts(location.id)
+      : Promise.resolve(null),
+    needPurchases && location
       ? prisma.purchaseOrder.count({
           where: {
             locationId: location.id,
             status: { in: ["PENDING", "ORDERED", "PARTIALLY_RECEIVED"] },
           },
         })
-      : 0,
-    location ? purchaseOrderService.suppliersDueToday(location.id) : [],
-    location
+      : Promise.resolve(0),
+    needPurchases && location
+      ? purchaseOrderService.suppliersDueToday(location.id)
+      : Promise.resolve([]),
+    needAttendanceAlert && location
       ? prisma.employeeAttendance.count({
           where: {
             locationId: location.id,
@@ -92,198 +126,167 @@ export default async function DashboardPage() {
             status: "LATE",
           },
         })
-      : 0,
-    location
-      ? prisma.service.findMany({
-          where: {
-            locationId: location.id,
-            status: "ACTIVE",
-            nextServiceDate: {
-              gte: start,
-              lte: new Date(Date.now() + 7 * 86400000),
-            },
-          },
-          orderBy: { nextServiceDate: "asc" },
-          take: 5,
-        })
-      : [],
-    location
-      ? prisma.service.findMany({
+      : Promise.resolve(0),
+    needServices && location
+      ? prisma.service.count({
           where: {
             locationId: location.id,
             status: "ACTIVE",
             nextServiceDate: { lt: start },
           },
-          orderBy: { nextServiceDate: "asc" },
-          take: 5,
         })
-      : [],
+      : Promise.resolve(0),
   ]);
 
-  const low = alerts?.low.length ?? 0;
-  const out = alerts?.out.length ?? 0;
-  const suggested = alerts?.suggested.length ?? 0;
-  const canFinance = await checkPermission("finance", "read");
+  const paths = hubPathsForPersona(persona).filter((p) => {
+    if (!p.resource) return true;
+    return hasPermission(
+      permissions,
+      p.resource as Parameters<typeof hasPermission>[1],
+      "read",
+    );
+  });
 
-  const attention: Array<{ text: string; href: string }> = [];
-  if (low + out > 0) {
-    attention.push({
-      text: `${low + out} productos con stock bajo o agotados`,
-      href: "/inventory",
-    });
-  }
-  if (dueSuppliers.length > 0) {
-    attention.push({
-      text: `${dueSuppliers.length} pedidos deben realizarse hoy`,
-      href: "/purchases",
-    });
-  }
-  if (overdueServices.length > 0) {
-    attention.push({
-      text: `${overdueServices.length} servicios vencidos`,
-      href: "/services",
-    });
-  }
-  if (lateToday > 0) {
-    attention.push({
-      text: `${lateToday} empleado(s) con retardo hoy`,
-      href: "/attendance",
-    });
-  }
+  const metrics = buildMetrics(persona, {
+    salesToday,
+    tablesOccupied,
+    tablesTotal,
+    tablesAwaiting,
+    peopleToday,
+    low: alerts?.low.length ?? 0,
+    out: alerts?.out.length ?? 0,
+    openPOs,
+  });
+
+  const attention = buildAttention(persona, {
+    low: alerts?.low.length ?? 0,
+    out: alerts?.out.length ?? 0,
+    dueCount: dueSuppliers.length,
+    overdueServices,
+    lateToday,
+    tablesAwaiting,
+  });
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Inicio</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {location?.name ?? "Sin sucursal"} · operación de hoy
-        </p>
-      </div>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Hoy
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Metric title="Ventas" value={`$${salesToday.toFixed(2)}`} />
-          <Metric
-            title="Mesas abiertas"
-            value={`${tablesOccupied} / ${tablesTotal}`}
-          />
-          <Metric title="Personas atendidas" value={String(peopleToday)} />
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Necesita atención
-        </h2>
-        {attention.length === 0 ? (
-          <Card>
-            <CardContent className="pt-6 text-sm text-muted-foreground">
-              Todo en orden por ahora.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {attention.map((a) => (
-              <Link
-                key={a.href + a.text}
-                href={a.href}
-                className="flex items-center justify-between rounded-xl border border-[var(--warning)]/40 bg-surface px-4 py-3 text-sm hover:bg-surface-secondary"
-              >
-                <span>{a.text}</span>
-                <Badge variant="secondary">Ver</Badge>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Próximamente
-        </h2>
-        <div className="grid gap-3 lg:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Pedidos / proveedores</CardTitle>
-              <CardDescription>
-                Hoy es {WEEKDAY_LABELS[weekdayToday()]}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {dueSuppliers.length === 0 ? (
-                <p className="text-muted-foreground">Sin pedidos programados hoy.</p>
-              ) : (
-                dueSuppliers.map((s) => (
-                  <Link
-                    key={s.id}
-                    href="/suppliers"
-                    className="block rounded-lg border border-border px-3 py-2 hover:bg-muted/40"
-                  >
-                    {s.name} · pedir hoy
-                  </Link>
-                ))
-              )}
-              <p className="text-muted-foreground">
-                {openPOs} pedidos por recibir · {suggested} sugeridos
-              </p>
-              <Link
-                href="/purchases"
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-              >
-                Ir a pedidos
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Mantenimiento</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {[...overdueServices, ...upcomingServices].length === 0 ? (
-                <p className="text-muted-foreground">Sin servicios próximos.</p>
-              ) : (
-                [...overdueServices, ...upcomingServices].slice(0, 5).map((s) => (
-                  <Link
-                    key={s.id}
-                    href="/services"
-                    className="flex justify-between rounded-lg border border-border px-3 py-2 hover:bg-muted/40"
-                  >
-                    <span>{s.name}</span>
-                    <span className="text-muted-foreground">
-                      {s.nextServiceDate
-                        ? s.nextServiceDate.toLocaleDateString("es-MX")
-                        : "—"}
-                    </span>
-                  </Link>
-                ))
-              )}
-              {canFinance ? (
-                <Link
-                  href="/finance"
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                >
-                  Finanzas
-                </Link>
-              ) : null}
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-    </div>
+    <RoleHomeView
+      persona={persona}
+      locationName={location?.name ?? "Sin sucursal"}
+      paths={paths}
+      metrics={metrics}
+      attention={attention}
+    />
   );
 }
 
-function Metric({ title, value }: { title: string; value: string }) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
-      </CardHeader>
-    </Card>
-  );
+function buildMetrics(
+  persona: RolePersona,
+  data: {
+    salesToday: number;
+    tablesOccupied: number;
+    tablesTotal: number;
+    tablesAwaiting: number;
+    peopleToday: number;
+    low: number;
+    out: number;
+    openPOs: number;
+  },
+): HomeMetric[] {
+  if (persona === "kitchen") return [];
+  if (persona === "waiter") {
+    return [
+      {
+        title: "Mesas abiertas",
+        value: `${data.tablesOccupied} / ${data.tablesTotal}`,
+      },
+      { title: "Personas hoy", value: String(data.peopleToday) },
+    ];
+  }
+  if (persona === "cashier") {
+    return [
+      { title: "Ventas hoy", value: `$${data.salesToday.toFixed(2)}` },
+      { title: "Por cobrar", value: String(data.tablesAwaiting) },
+      {
+        title: "Mesas abiertas",
+        value: `${data.tablesOccupied} / ${data.tablesTotal}`,
+      },
+    ];
+  }
+  if (persona === "inventory") {
+    return [
+      {
+        title: "Stock bajo / agotado",
+        value: String(data.low + data.out),
+      },
+      { title: "Pedidos abiertos", value: String(data.openPOs) },
+    ];
+  }
+  return [
+    { title: "Ventas", value: `$${data.salesToday.toFixed(2)}` },
+    {
+      title: "Mesas abiertas",
+      value: `${data.tablesOccupied} / ${data.tablesTotal}`,
+    },
+    { title: "Personas atendidas", value: String(data.peopleToday) },
+  ];
+}
+
+function buildAttention(
+  persona: RolePersona,
+  data: {
+    low: number;
+    out: number;
+    dueCount: number;
+    overdueServices: number;
+    lateToday: number;
+    tablesAwaiting: number;
+  },
+): HomeAttention[] {
+  const attention: HomeAttention[] = [];
+  if (
+    (persona === "cashier" || persona === "manager" || persona === "admin") &&
+    data.tablesAwaiting > 0
+  ) {
+    attention.push({
+      text: `${data.tablesAwaiting} mesa(s) por cobrar`,
+      href: "/pos",
+    });
+  }
+  if (
+    (persona === "inventory" ||
+      persona === "manager" ||
+      persona === "admin") &&
+    data.low + data.out > 0
+  ) {
+    attention.push({
+      text: `${data.low + data.out} productos con stock bajo o agotados`,
+      href: "/inventory",
+    });
+  }
+  if (
+    (persona === "inventory" ||
+      persona === "manager" ||
+      persona === "admin") &&
+    data.dueCount > 0
+  ) {
+    attention.push({
+      text: `${data.dueCount} pedidos deben realizarse hoy`,
+      href: "/purchases",
+    });
+  }
+  if (
+    (persona === "manager" || persona === "admin") &&
+    data.overdueServices > 0
+  ) {
+    attention.push({
+      text: `${data.overdueServices} servicios vencidos`,
+      href: "/services",
+    });
+  }
+  if ((persona === "manager" || persona === "admin") && data.lateToday > 0) {
+    attention.push({
+      text: `${data.lateToday} empleado(s) con retardo hoy`,
+      href: "/attendance",
+    });
+  }
+  return attention;
 }

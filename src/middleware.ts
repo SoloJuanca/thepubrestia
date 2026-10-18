@@ -1,36 +1,30 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { homePathForRoles } from "@/lib/post-login";
 
 const publicPaths = ["/login", "/verify", "/forgot-password", "/review"];
 
 /**
- * Auth.js issues `__Secure-authjs.session-token` on HTTPS.
- * getToken() defaults to the non-secure name unless secureCookie is true,
- * which made production always look logged-out while local (http) worked.
+ * Auth.js may issue `__Secure-authjs.session-token` (HTTPS) or
+ * `authjs.session-token` (HTTP). Try both so a leftover secure cookie on
+ * localhost (or vice versa) does not look like "logged out".
  */
 async function readSessionToken(request: NextRequest) {
   const secret = process.env.AUTH_SECRET;
-  const secure =
-    request.nextUrl.protocol === "https:" || Boolean(process.env.VERCEL);
 
-  const token = await getToken({
+  const primary = await getToken({
     req: request,
     secret,
-    secureCookie: secure,
+    secureCookie: true,
   });
-  if (token) return token;
+  if (primary) return primary;
 
-  // Fallback when AUTH_URL was http:// and cookie was issued without prefix
-  if (secure) {
-    return getToken({
-      req: request,
-      secret,
-      secureCookie: false,
-    });
-  }
-
-  return null;
+  return getToken({
+    req: request,
+    secret,
+    secureCookie: false,
+  });
 }
 
 export async function middleware(request: NextRequest) {
@@ -50,6 +44,7 @@ export async function middleware(request: NextRequest) {
   );
 
   const token = await readSessionToken(request);
+  const roles = (token?.roles as string[] | undefined) ?? [];
 
   if (!token && !isPublic && pathname !== "/") {
     const url = request.nextUrl.clone();
@@ -60,12 +55,11 @@ export async function middleware(request: NextRequest) {
 
   if (token && (pathname === "/login" || pathname === "/")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = homePathForRoles(roles);
     return NextResponse.redirect(url);
   }
 
   if (pathname.startsWith("/finance") && token) {
-    const roles = (token.roles as string[]) ?? [];
     const financeAllowed = roles.some((r) =>
       ["SUPER_ADMIN", "ADMIN"].includes(r),
     );

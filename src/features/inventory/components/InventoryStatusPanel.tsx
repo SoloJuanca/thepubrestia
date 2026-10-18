@@ -29,6 +29,7 @@ type Props = {
   outCount: number;
   suggestedCount: number;
   inventoryValue: number;
+  canViewCosts?: boolean;
 };
 
 function stockStatus(row: IngredientRow): "OK" | "BAJO" | "AGOTADO" {
@@ -45,6 +46,7 @@ export function InventoryStatusPanel({
   outCount,
   suggestedCount,
   inventoryValue,
+  canViewCosts = true,
 }: Props) {
   function addToNextOrder(name: string) {
     toast.success(`${name} listo para el próximo pedido`, {
@@ -61,13 +63,15 @@ export function InventoryStatusPanel({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          title="Valor inventario"
-          value={`$${inventoryValue.toLocaleString("es-MX", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}`}
-        />
+        {canViewCosts ? (
+          <SummaryCard
+            title="Valor inventario"
+            value={`$${inventoryValue.toLocaleString("es-MX", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`}
+          />
+        ) : null}
         <SummaryCard
           title="Stock bajo"
           value={String(lowCount)}

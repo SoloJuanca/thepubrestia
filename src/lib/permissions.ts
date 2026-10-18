@@ -15,6 +15,7 @@ export type PermissionResource =
   | "orders"
   | "menu"
   | "inventory"
+  | "recipes"
   | "purchases"
   | "suppliers"
   | "customers"
@@ -53,7 +54,7 @@ export const NAV_GROUPS = [
 
 export const NAV_ITEMS: NavItem[] = [
   { title: "Inicio", href: "/dashboard", resource: "dashboard", group: "OPERACIÓN" },
-  { title: "POS / Mesas", href: "/pos", resource: "pos", group: "OPERACIÓN" },
+  { title: "Mesas", href: "/pos", resource: "pos", group: "OPERACIÓN" },
   { title: "Órdenes", href: "/orders", resource: "orders", group: "OPERACIÓN" },
   { title: "Cocina", href: "/kitchen", resource: "kitchen", group: "OPERACIÓN" },
   {
@@ -70,7 +71,7 @@ export const NAV_ITEMS: NavItem[] = [
     group: "CATÁLOGO",
   },
   {
-    title: "Pedidos",
+    title: "Pedidos a proveedor",
     href: "/purchases",
     resource: "purchases",
     group: "ABASTECIMIENTO",
@@ -104,6 +105,13 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Asistencia",
     href: "/attendance",
     resource: "attendance",
+    group: "EQUIPO",
+  },
+  {
+    title: "QR asistencia",
+    href: "/attendance/station",
+    resource: "attendance",
+    action: "update",
     group: "EQUIPO",
   },
   {
@@ -144,6 +152,7 @@ const ALL_RESOURCES: PermissionResource[] = [
   "orders",
   "menu",
   "inventory",
+  "recipes",
   "purchases",
   "suppliers",
   "customers",
@@ -181,6 +190,28 @@ export function allPermissionPairs(): Array<{
     ALL_ACTIONS.map((action) => ({ resource, action })),
   );
 }
+
+/** Shared kitchen floor: orders board + attendance (QR check-in uses create). */
+const kitchenFloorPerms: Array<{
+  resource: PermissionResource;
+  action: PermissionAction;
+}> = [
+  { resource: "kitchen", action: "read" },
+  { resource: "kitchen", action: "update" },
+  { resource: "orders", action: "read" },
+  { resource: "orders", action: "update" },
+  { resource: "recipes", action: "read" },
+  { resource: "attendance", action: "read" },
+  { resource: "attendance", action: "create" },
+];
+
+const kitchenPrepInventoryRead: Array<{
+  resource: PermissionResource;
+  action: PermissionAction;
+}> = [
+  { resource: "inventory", action: "read" },
+  { resource: "dashboard", action: "read" },
+];
 
 export function permissionsForRole(
   role: RoleCode,
@@ -239,14 +270,27 @@ export function permissionsForRole(
         { resource: "attendance", action: "update" },
         { resource: "expenses", action: "read" },
       ];
+    /** Auxiliar: cola, órdenes, recetas (solo ver), asistencia vía QR */
+    case "KITCHEN_ASSISTANT":
+      return [...kitchenFloorPerms];
+    /** Cocinero: auxiliar + inventario de preparación (lectura / producción) */
     case "KITCHEN":
+    case "KITCHEN_COOK":
       return [
-        { resource: "kitchen", action: "read" },
-        { resource: "kitchen", action: "update" },
-        { resource: "orders", action: "read" },
-        { resource: "orders", action: "update" },
-        { resource: "attendance", action: "read" },
-        { resource: "attendance", action: "create" },
+        ...kitchenFloorPerms,
+        ...kitchenPrepInventoryRead,
+        { resource: "inventory", action: "adjust" },
+      ];
+    /** Encargado: cocinero + editar recetas e insumos */
+    case "KITCHEN_LEAD":
+      return [
+        ...kitchenFloorPerms,
+        ...kitchenPrepInventoryRead,
+        { resource: "inventory", action: "create" },
+        { resource: "inventory", action: "update" },
+        { resource: "inventory", action: "adjust" },
+        { resource: "recipes", action: "create" },
+        { resource: "recipes", action: "update" },
         { resource: "attendance", action: "update" },
       ];
     case "INVENTORY":
@@ -256,6 +300,9 @@ export function permissionsForRole(
         { resource: "inventory", action: "create" },
         { resource: "inventory", action: "update" },
         { resource: "inventory", action: "adjust" },
+        { resource: "recipes", action: "read" },
+        { resource: "recipes", action: "create" },
+        { resource: "recipes", action: "update" },
         { resource: "purchases", action: "read" },
         { resource: "purchases", action: "create" },
         { resource: "purchases", action: "update" },
@@ -278,5 +325,14 @@ export function hasPermission(
 ): boolean {
   return userPermissions.some(
     (p) => p.resource === resource && p.action === action,
+  );
+}
+
+export function isKitchenRole(roles: string[] | undefined | null): boolean {
+  const list = roles ?? [];
+  return list.some((r) =>
+    ["KITCHEN", "KITCHEN_LEAD", "KITCHEN_COOK", "KITCHEN_ASSISTANT"].includes(
+      r,
+    ),
   );
 }

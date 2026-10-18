@@ -601,7 +601,7 @@ async function main() {
     (await prisma.location.create({
       data: {
         id: "seed-location-main",
-        name: "The Pub GameStore",
+        name: "The Pub Game Store",
         timezone: "America/Mexico_City",
         active: true,
       },

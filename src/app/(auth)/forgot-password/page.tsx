@@ -6,8 +6,8 @@ export default function ForgotPasswordPage() {
           Recuperar contraseña
         </h1>
         <p className="text-muted-foreground">
-          Disponible cuando configures Resend (`RESEND_API_KEY`). Por ahora
-          contacta a un administrador para reiniciar tu acceso.
+          Pide a un administrador que reinicie tu contraseña desde Empleados →
+          perfil → Contraseña. Luego cámbiala en Mi cuenta al iniciar sesión.
         </p>
       </div>
     </main>

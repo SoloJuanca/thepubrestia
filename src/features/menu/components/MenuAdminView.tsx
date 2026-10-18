@@ -84,7 +84,7 @@ export function MenuAdminView({
           categories={categories}
         />
       ) : (
-        <MenuItemsTable items={items} />
+        <MenuItemsTable items={items} categories={categories} />
       )}
     </div>
   );

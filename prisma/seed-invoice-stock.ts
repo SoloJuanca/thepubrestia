@@ -15,7 +15,7 @@ type InvoiceLine = {
 };
 
 /**
- * Factura / pedido recibido — The Pub GameStore
+ * Factura / pedido recibido — The Pub Game Store
  * Cantidades y costos unitarios del documento del usuario.
  */
 const LINES: InvoiceLine[] = [
@@ -203,7 +203,7 @@ async function main() {
     (await prisma.location.create({
       data: {
         id: "seed-location-main",
-        name: "The Pub GameStore",
+        name: "The Pub Game Store",
         timezone: "America/Mexico_City",
         active: true,
       },

@@ -7,6 +7,9 @@ const roleCodeSchema = z.enum([
   "WAITER",
   "CASHIER",
   "KITCHEN",
+  "KITCHEN_LEAD",
+  "KITCHEN_COOK",
+  "KITCHEN_ASSISTANT",
   "INVENTORY",
 ]);
 

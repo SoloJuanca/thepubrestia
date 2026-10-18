@@ -8,9 +8,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -55,7 +55,7 @@
 }
 
 :root {
-  /* The Pub GameStore institutional palette */
+  /* The Pub Game Store institutional palette */
   --pub-blue: #1d71bb;
   --pub-blue-light: #40adff;
   --pub-blue-dark: #194e9a;
@@ -136,10 +136,41 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+  }
+  body {
+    @apply bg-background font-sans text-foreground;
+  }
+  /* Native controls don't inherit font-family on all browsers */
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a,
+  summary,
+  label[for],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled,
+  select:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* Mobile shell: keep desktop sidebar out of small viewports even if utilities lag */
+.app-sidebar-desktop {
+  display: none;
+}
+@media (min-width: 768px) {
+  .app-sidebar-desktop {
+    display: flex;
   }
 }

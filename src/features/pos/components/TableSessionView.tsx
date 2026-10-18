@@ -104,6 +104,7 @@ export function TableSessionView({ session }: Props) {
   const [payOpen, setPayOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [payCheckId, setPayCheckId] = useState<string | null>(null);
+  const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
 
   const activeCheck =
     session.checks.find((c) => c.id === activeCheckId) ?? session.checks[0];
@@ -114,6 +115,8 @@ export function TableSessionView({ session }: Props) {
   const openChecks = session.checks.filter((c) => c.status === "OPEN");
   const pendingTotal = openChecks.reduce((s, c) => s + Number(c.total), 0);
   const orderTotal = session.checks.reduce((s, c) => s + Number(c.total), 0);
+  const itemCount =
+    activeCheck?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
 
   const filteredItems = useMemo(() => {
     return session.menuItems.filter((item) => {
@@ -166,8 +169,8 @@ export function TableSessionView({ session }: Props) {
   }
 
   return (
-    <div className="flex min-h-[calc(100svh-6rem)] flex-col gap-3 xl:flex-row">
-      <section className="flex min-w-0 flex-[65] flex-col gap-3">
+    <div className="flex min-h-[calc(100svh-7.5rem)] flex-col gap-3 pb-24 xl:min-h-[calc(100svh-6rem)] xl:flex-row xl:pb-0">
+      <section className="order-2 flex min-w-0 flex-[65] flex-col gap-3 xl:order-1">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Link
@@ -176,7 +179,7 @@ export function TableSessionView({ session }: Props) {
             >
               ← Mesas
             </Link>
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
               {session.tableName}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -249,7 +252,7 @@ export function TableSessionView({ session }: Props) {
         </div>
       </section>
 
-      <aside className="flex w-full flex-col rounded-2xl border border-border bg-surface xl:w-[35%] xl:max-w-md">
+      <aside className="order-1 flex max-h-[min(42svh,22rem)] w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface xl:order-2 xl:max-h-none xl:w-[35%] xl:max-w-md">
         <div className="border-b border-border p-3">
           {session.checks.length > 1 ? (
             <div className="mb-2 flex flex-wrap gap-1">
@@ -404,7 +407,7 @@ export function TableSessionView({ session }: Props) {
                   setPayOpen(true);
                 }}
               >
-                Pagar ${activeCheck.total}
+                Cobrar ${activeCheck.total}
               </Button>
             </>
           ) : activeCheck?.status === "CLOSED" ? (
@@ -472,6 +475,124 @@ export function TableSessionView({ session }: Props) {
           ) : null}
         </div>
       </aside>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-3 py-3 backdrop-blur xl:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex max-w-lg gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12 shrink-0 px-3"
+            onClick={() => setMobileOrderOpen(true)}
+          >
+            ${activeCheck?.total ?? "0.00"}
+            {itemCount > 0 ? ` · ${itemCount}` : ""}
+          </Button>
+          {activeCheck?.status === "OPEN" && Number(activeCheck.total) > 0 ? (
+            <>
+              <Button
+                type="button"
+                className="min-h-12 flex-1"
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const result = await sendToKitchenAction({
+                      checkId: activeCheck.id,
+                    });
+                    if (!result.ok) toast.error(result.error);
+                    else toast.success(result.message);
+                  })
+                }
+              >
+                Enviar a cocina
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-12 flex-1"
+                onClick={() => {
+                  setPayCheckId(activeCheck.id);
+                  setPayOpen(true);
+                }}
+              >
+                Cobrar
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <Sheet open={mobileOrderOpen} onOpenChange={setMobileOrderOpen}>
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+        >
+          <SheetHeader className="shrink-0 border-b border-border">
+            <SheetTitle>
+              Cuenta · {session.tableName} · $
+              {activeCheck?.total ?? "0.00"}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+            {activeCheck?.items.length ? (
+              activeCheck.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-border p-2 text-sm"
+                >
+                  <div className="flex justify-between gap-2">
+                    <div>
+                      <p className="font-medium">
+                        {item.quantity} × {item.nameSnapshot}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {seatLabel(item.seatId)}
+                      </p>
+                    </div>
+                    <p className="font-semibold">${item.lineTotal}</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin productos.</p>
+            )}
+          </div>
+          <div className="shrink-0 space-y-2 border-t border-border p-3">
+            {activeCheck?.status === "OPEN" && Number(activeCheck.total) > 0 ? (
+              <>
+                <Button
+                  className="min-h-12 w-full"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const result = await sendToKitchenAction({
+                        checkId: activeCheck.id,
+                      });
+                      if (!result.ok) toast.error(result.error);
+                      else {
+                        toast.success(result.message);
+                        setMobileOrderOpen(false);
+                      }
+                    })
+                  }
+                >
+                  Enviar a cocina
+                </Button>
+                <Button
+                  className="min-h-12 w-full"
+                  variant="secondary"
+                  onClick={() => {
+                    setPayCheckId(activeCheck.id);
+                    setPayOpen(true);
+                    setMobileOrderOpen(false);
+                  }}
+                >
+                  Pagar ${activeCheck.total}
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {payCheck ? (
         <PaymentSheet

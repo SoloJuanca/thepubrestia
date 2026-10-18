@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,15 +12,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { BRAND } from "@/lib/brand";
 
 type LoginFormProps = {
   callbackUrl?: string;
 };
 
-export function LoginForm({ callbackUrl = "/dashboard" }: LoginFormProps) {
-  const router = useRouter();
-  const [email, setEmail] = useState("admin@thepub.local");
-  const [password, setPassword] = useState("Password123!");
+export function LoginForm({ callbackUrl = "/post-login" }: LoginFormProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -31,8 +30,11 @@ export function LoginForm({ callbackUrl = "/dashboard" }: LoginFormProps) {
     setError(null);
 
     try {
+      // Drop stale JWT cookies encrypted with a previous AUTH_SECRET
+      await signOut({ redirect: false });
+
       const result = await signIn("credentials", {
-        email,
+        email: email.trim().toLowerCase(),
         password,
         redirect: false,
       });
@@ -42,11 +44,13 @@ export function LoginForm({ callbackUrl = "/dashboard" }: LoginFormProps) {
         return;
       }
 
-      router.push(callbackUrl);
-      router.refresh();
+      const next =
+        callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")
+          ? callbackUrl
+          : "/post-login";
+      window.location.assign(next);
     } catch {
       setError("No se pudo iniciar sesión. Intenta de nuevo.");
-    } finally {
       setLoading(false);
     }
   }
@@ -54,19 +58,22 @@ export function LoginForm({ callbackUrl = "/dashboard" }: LoginFormProps) {
   return (
     <Card className="w-full max-w-md border-border/60 shadow-lg">
       <CardHeader className="space-y-2">
-        <CardTitle className="text-2xl tracking-tight">The Pub GameStore</CardTitle>
+        <CardTitle className="text-2xl tracking-tight">{BRAND.name}</CardTitle>
         <CardDescription>
           Acceso de empleados — correo y contraseña
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4" autoComplete="off">
           <div className="space-y-2">
             <Label htmlFor="email">Correo</Label>
             <Input
               id="email"
+              name="email"
               type="email"
-              autoComplete="email"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -76,8 +83,11 @@ export function LoginForm({ callbackUrl = "/dashboard" }: LoginFormProps) {
             <Label htmlFor="password">Contraseña</Label>
             <Input
               id="password"
+              name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-1p-ignore
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

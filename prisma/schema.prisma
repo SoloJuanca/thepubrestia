@@ -20,7 +20,11 @@ enum RoleCode {
   MANAGER
   WAITER
   CASHIER
+  /// @deprecated Prefer KITCHEN_COOK — kept for existing DB rows
   KITCHEN
+  KITCHEN_LEAD
+  KITCHEN_COOK
+  KITCHEN_ASSISTANT
   INVENTORY
 }
 
@@ -41,6 +45,8 @@ enum MovementType {
   ADJUSTMENT
   RETURN
   TRANSFER
+  PRODUCTION_IN
+  PRODUCTION_OUT
 }
 
 enum ReferenceType {
@@ -50,6 +56,14 @@ enum ReferenceType {
   ADJUSTMENT
   TRANSFER
   MANUAL
+  PRODUCTION
+}
+
+enum IngredientKind {
+  RAW
+  PREP
+  FROZEN
+  PACKAGED
 }
 
 enum TableStatus {
@@ -192,12 +206,13 @@ model User {
   employeeProfile  EmployeeProfile?
   customerProfile  CustomerProfile?
   auditLogs        AuditLog[]
-  inventoryMoves   InventoryMovement[] @relation("MovementEmployee")
-  ordersAsWaiter   Order[]             @relation("OrderWaiter")
-  payments         Payment[]
-  wasteRecords     WasteRecord[]
-  dailyCloses      DailyClose[]
-  reviewsAsWaiter  Review[]            @relation("ReviewWaiter")
+  inventoryMoves     InventoryMovement[] @relation("MovementEmployee")
+  ordersAsWaiter     Order[]             @relation("OrderWaiter")
+  payments           Payment[]
+  wasteRecords       WasteRecord[]
+  dailyCloses        DailyClose[]
+  reviewsAsWaiter    Review[]            @relation("ReviewWaiter")
+  productionBatches  ProductionBatch[]   @relation("ProductionEmployee")
   assignedPromos   CustomerPromotion[] @relation("PromoAssignedBy")
 
   @@index([type])
@@ -316,6 +331,22 @@ model Location {
   services           Service[]
   attendances        EmployeeAttendance[]
   timeOffs           EmployeeTimeOff[]
+  productionBatches  ProductionBatch[]
+  attendanceQrTokens AttendanceQrToken[]
+}
+
+/// Rotating QR token shown at the venue for check-in / check-out.
+model AttendanceQrToken {
+  id         String   @id @default(cuid())
+  locationId String
+  token      String   @unique
+  expiresAt  DateTime
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId, active, expiresAt])
 }
 
 model EmployeeProfile {
@@ -443,30 +474,106 @@ model ModifierOption {
 // ─── Inventory ───────────────────────────────────────────────────────────────
 
 model Ingredient {
+  id                  String         @id @default(cuid())
+  locationId          String
+  name                String
+  category            String?
+  kind                IngredientKind @default(RAW)
+  baseUnit            UnitType
+  /// Pieces per purchase box/pack (informational; stock is kept in baseUnit).
+  packSize            Int?
+  storageNote         String?
+  currentStock        Decimal        @default(0) @db.Decimal(14, 4)
+  minimumStock        Decimal        @default(0) @db.Decimal(14, 4)
+  targetStock         Decimal?       @db.Decimal(14, 4)
+  averageCost         Decimal        @default(0) @db.Decimal(12, 4)
+  preferredSupplierId String?
+  active              Boolean        @default(true)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  location           Location              @relation(fields: [locationId], references: [id])
+  preferredSupplier  Supplier?             @relation("PreferredSupplier", fields: [preferredSupplierId], references: [id])
+  recipeItems        RecipeItem[]
+  movements          InventoryMovement[]
+  supplierProducts   SupplierProduct[]
+  purchaseItems      PurchaseOrderItem[]
+  wasteRecords       WasteRecord[]
+  prepRecipeAsOutput PrepRecipe?
+  prepRecipeInputs   PrepRecipeItem[]      @relation("PrepRecipeInputIngredient")
+  productionBatches  ProductionBatch[]
+  productionInputs   ProductionBatchInput[]
+
+  @@index([locationId, active])
+  @@index([locationId, kind])
+  @@index([preferredSupplierId])
+}
+
+/// Recipe for producing a PREP ingredient from RAW/FROZEN inputs.
+model PrepRecipe {
   id                 String   @id @default(cuid())
   locationId         String
-  name               String
-  category           String?
-  baseUnit           UnitType
-  currentStock       Decimal  @default(0) @db.Decimal(14, 4)
-  minimumStock       Decimal  @default(0) @db.Decimal(14, 4)
-  targetStock        Decimal? @db.Decimal(14, 4)
-  averageCost        Decimal  @default(0) @db.Decimal(12, 4)
-  preferredSupplierId String?
+  outputIngredientId String   @unique
+  /// Theoretical output quantity in output ingredient base unit (per batch formula).
+  outputQuantity     Decimal  @db.Decimal(14, 4)
+  notes              String?
   active             Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  location          Location            @relation(fields: [locationId], references: [id])
-  preferredSupplier Supplier?           @relation("PreferredSupplier", fields: [preferredSupplierId], references: [id])
-  recipeItems       RecipeItem[]
-  movements         InventoryMovement[]
-  supplierProducts  SupplierProduct[]
-  purchaseItems     PurchaseOrderItem[]
-  wasteRecords      WasteRecord[]
+  outputIngredient Ingredient      @relation(fields: [outputIngredientId], references: [id], onDelete: Cascade)
+  items            PrepRecipeItem[]
 
   @@index([locationId, active])
-  @@index([preferredSupplierId])
+}
+
+model PrepRecipeItem {
+  id               String   @id @default(cuid())
+  prepRecipeId     String
+  ingredientId     String
+  quantity         Decimal  @db.Decimal(14, 4)
+  unit             UnitType
+
+  prepRecipe PrepRecipe @relation(fields: [prepRecipeId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation("PrepRecipeInputIngredient", fields: [ingredientId], references: [id])
+
+  @@unique([prepRecipeId, ingredientId])
+  @@index([ingredientId])
+}
+
+model ProductionBatch {
+  id                   String   @id @default(cuid())
+  locationId           String
+  outputIngredientId   String
+  quantityTheoretical  Decimal  @db.Decimal(14, 4)
+  quantityProduced     Decimal  @db.Decimal(14, 4)
+  yieldPercent         Decimal  @db.Decimal(8, 2)
+  producedAt           DateTime @default(now())
+  employeeId           String?
+  notes                String?
+  createdAt            DateTime @default(now())
+
+  location         Location               @relation(fields: [locationId], references: [id])
+  outputIngredient Ingredient             @relation(fields: [outputIngredientId], references: [id])
+  employee         User?                  @relation("ProductionEmployee", fields: [employeeId], references: [id])
+  inputs           ProductionBatchInput[]
+
+  @@index([locationId, producedAt])
+  @@index([outputIngredientId, producedAt])
+}
+
+model ProductionBatchInput {
+  id           String   @id @default(cuid())
+  batchId      String
+  ingredientId String
+  quantity     Decimal  @db.Decimal(14, 4)
+  unit         UnitType
+
+  batch      ProductionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  ingredient Ingredient      @relation(fields: [ingredientId], references: [id])
+
+  @@index([batchId])
+  @@index([ingredientId])
 }
 
 model RecipeItem {

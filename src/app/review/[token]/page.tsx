@@ -16,7 +16,7 @@ export default async function PublicReviewPage({ params }: Props) {
   }
 
   const restaurantName =
-    ctx.token.order?.location.name ?? "The Pub GameStore";
+    ctx.token.order?.location.name ?? "The Pub Game Store";
   const tableName = ctx.token.order?.table?.name ?? null;
 
   if (!ctx.token) notFound();

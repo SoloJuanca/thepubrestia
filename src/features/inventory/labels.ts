@@ -24,7 +24,18 @@ export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   ADJUSTMENT: "Ajuste",
   RETURN: "Devolución",
   TRANSFER: "Transferencia",
+  PRODUCTION_IN: "Producción (entrada)",
+  PRODUCTION_OUT: "Producción (consumo)",
 };
+
+export const INGREDIENT_KIND_LABELS: Record<string, string> = {
+  RAW: "Crudo",
+  PREP: "Producción",
+  FROZEN: "Congelado",
+  PACKAGED: "Empaquetado",
+};
+
+export const KIND_OPTIONS = ["RAW", "PREP", "FROZEN", "PACKAGED"] as const;
 
 export const UNIT_OPTIONS = [
   "KG",

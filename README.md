@@ -1,6 +1,6 @@
-# The Pub GameStore — Management System
+# The Pub Game Store — Management System
 
-Sistema de gestión integral (POS, inventario, compras, clientes, finanzas) para **The Pub GameStore**.
+Sistema de gestión integral (POS, inventario, compras, clientes, finanzas) para **The Pub Game Store**.
 
 ## Fase 1 — Foundation
 
@@ -138,7 +138,10 @@ Contraseña para todos los empleados: `Password123!`
 | manager@thepub.local | MANAGER |
 | waiter@thepub.local | WAITER |
 | cashier@thepub.local | CASHIER |
-| kitchen@thepub.local | KITCHEN |
+| kitchen@thepub.local | Encargado de cocina (KITCHEN_LEAD) |
+| kitchen.lead@thepub.local | Encargado de cocina |
+| kitchen.cook@thepub.local | Cocinero |
+| kitchen.aux@thepub.local | Auxiliar de cocina |
 | inventory@thepub.local | INVENTORY |
 
 ## Scripts

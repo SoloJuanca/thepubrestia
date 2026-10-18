@@ -41,9 +41,12 @@ const STATUS_BORDER: Record<string, string> = {
   CLEANING: "border-muted-foreground/40 bg-surface-secondary",
 };
 
+type TableFilter = "all" | "free" | "occupied" | "pay";
+
 export function TablesGrid({ tables, waiters, currentUserId }: Props) {
   const [pending, startTransition] = useTransition();
   const [opening, setOpening] = useState<TableCardData | null>(null);
+  const [filter, setFilter] = useState<TableFilter>("all");
 
   function markAvailable(tableId: string) {
     startTransition(async () => {
@@ -60,25 +63,86 @@ export function TablesGrid({ tables, waiters, currentUserId }: Props) {
     if (
       table.openOrderId &&
       table.unpaidCount > 0 &&
-      table.status === "OCCUPIED" &&
-      table.checkCount > 1
+      (table.status === "OCCUPIED" || table.status === "AWAITING_PAYMENT")
     ) {
       return "AWAITING_PAYMENT";
     }
     return table.status;
   }
 
+  const filtered = tables.filter((table) => {
+    const status = displayStatus(table);
+    if (filter === "free") {
+      return status === "AVAILABLE" || status === "CLEANING";
+    }
+    if (filter === "occupied") {
+      return status === "OCCUPIED" || status === "RESERVED";
+    }
+    if (filter === "pay") {
+      return status === "AWAITING_PAYMENT" || table.unpaidCount > 0;
+    }
+    return true;
+  });
+
+  const counts = {
+    all: tables.length,
+    free: tables.filter((t) => {
+      const s = displayStatus(t);
+      return s === "AVAILABLE" || s === "CLEANING";
+    }).length,
+    occupied: tables.filter((t) => {
+      const s = displayStatus(t);
+      return s === "OCCUPIED" || s === "RESERVED";
+    }).length,
+    pay: tables.filter(
+      (t) => displayStatus(t) === "AWAITING_PAYMENT" || t.unpaidCount > 0,
+    ).length,
+  };
+
+  const filterButtons: Array<{ id: TableFilter; label: string }> = [
+    { id: "all", label: `Todas (${counts.all})` },
+    { id: "free", label: `Libres (${counts.free})` },
+    { id: "occupied", label: `Ocupadas (${counts.occupied})` },
+    { id: "pay", label: `Por cobrar (${counts.pay})` },
+  ];
+
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">POS / Mesas</h1>
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+          Mesas
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Toca una mesa libre para abrir · tablet first
+          Toca una mesa libre para abrir · ocupada para atender o cobrar
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {tables.map((table) => {
+      <div className="flex flex-wrap gap-2">
+        {filterButtons.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setFilter(f.id)}
+            className={cn(
+              "cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              filter === f.id
+                ? "bg-[var(--pub-blue)] text-white"
+                : "bg-muted/60 text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          No hay mesas en este filtro.
+        </p>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {filtered.map((table) => {
           const status = displayStatus(table);
           const occupied = Boolean(table.openOrderId);
           const href = occupied ? `/pos/tables/${table.id}` : undefined;
@@ -86,7 +150,7 @@ export function TablesGrid({ tables, waiters, currentUserId }: Props) {
           const card = (
             <div
               className={cn(
-                "flex min-h-[112px] flex-col justify-between rounded-xl border-2 p-3 text-left transition-shadow hover:shadow-sm",
+                "flex min-h-[104px] flex-col justify-between rounded-xl border-2 p-3 text-left transition-shadow active:scale-[0.99] hover:shadow-sm sm:min-h-[112px]",
                 STATUS_BORDER[status] ?? "border-border bg-surface",
               )}
             >
