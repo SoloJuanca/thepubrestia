@@ -505,23 +505,44 @@ async function main() {
   await ensureRecipe(wings.id, "Salsa", 40, UnitType.ML);
   await ensureRecipe(soda.id, "Refresco", 1, UnitType.UNIT);
 
-  // Tables
-  for (let i = 1; i <= 10; i++) {
-    await prisma.restaurantTable.upsert({
+  // Floor: 32 half-tables (10-13 … 80-83); default join 10→11 and 13→12
+  const floorCodes: number[] = [];
+  for (let row = 1; row <= 8; row++) {
+    for (let seat = 0; seat <= 3; seat++) floorCodes.push(row * 10 + seat);
+  }
+  await prisma.restaurantTable.updateMany({
+    where: { locationId: location.id, name: { startsWith: "Mesa " } },
+    data: { active: false, joinedToId: null },
+  });
+  const tableIds = new Map<number, string>();
+  for (const code of floorCodes) {
+    const name = String(code);
+    const row = await prisma.restaurantTable.upsert({
       where: {
         locationId_name: {
           locationId: location.id,
-          name: `Mesa ${i}`,
+          name,
         },
       },
       create: {
         locationId: location.id,
-        name: `Mesa ${i}`,
-        capacity: i <= 6 ? 4 : 6,
-        sortOrder: i,
+        name,
+        capacity: 2,
+        sortOrder: code,
         active: true,
       },
-      update: { active: true },
+      update: { active: true, capacity: 2, sortOrder: code, joinedToId: null },
+    });
+    tableIds.set(code, row.id);
+  }
+  for (let row = 1; row <= 8; row++) {
+    await prisma.restaurantTable.update({
+      where: { id: tableIds.get(row * 10)! },
+      data: { joinedToId: tableIds.get(row * 10 + 1)! },
+    });
+    await prisma.restaurantTable.update({
+      where: { id: tableIds.get(row * 10 + 3)! },
+      data: { joinedToId: tableIds.get(row * 10 + 2)! },
     });
   }
 

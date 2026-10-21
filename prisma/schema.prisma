@@ -736,15 +736,20 @@ model RestaurantTable {
   status     TableStatus @default(AVAILABLE)
   sortOrder  Int         @default(0)
   active     Boolean     @default(true)
+  /// When set, this physical table is joined into the primary (left) table.
+  joinedToId String?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
-  location Location @relation(fields: [locationId], references: [id])
-  orders   Order[]
-  reviews  Review[]
+  location    Location          @relation(fields: [locationId], references: [id])
+  joinedTo    RestaurantTable?  @relation("TableMerge", fields: [joinedToId], references: [id])
+  joinedFrom  RestaurantTable[] @relation("TableMerge")
+  orders      Order[]
+  reviews     Review[]
 
   @@unique([locationId, name])
   @@index([locationId, status])
+  @@index([joinedToId])
 }
 
 model Order {

@@ -2,9 +2,15 @@ import {
   OrderStatus,
   Prisma,
   type PrismaClient,
+  type TableStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertAllChecksPaid } from "@/lib/pos-labels";
+import {
+  areAdjacent,
+  joinPrimaryCode,
+  parseTableCode,
+} from "@/lib/table-floor";
 import {
   calculateCheckTotals,
   calculateOrderItemAmounts,
@@ -15,6 +21,55 @@ type Tx = Prisma.TransactionClient;
 
 function toNum(v: Prisma.Decimal | number | string) {
   return Number(v);
+}
+
+async function syncJoinedTableStatus(
+  tx: Tx,
+  tableId: string,
+  status: TableStatus,
+) {
+  await tx.restaurantTable.update({
+    where: { id: tableId },
+    data: { status },
+  });
+  const children = await tx.restaurantTable.findMany({
+    where: { joinedToId: tableId },
+    select: { id: true },
+  });
+  for (const child of children) {
+    await syncJoinedTableStatus(tx, child.id, status);
+  }
+}
+
+async function joinedCapacity(tx: Tx, tableId: string, baseCapacity: number) {
+  const satellites = await tx.restaurantTable.findMany({
+    where: { joinedToId: tableId, active: true },
+    select: { id: true, capacity: true },
+  });
+  let total = baseCapacity;
+  for (const sat of satellites) {
+    total += await joinedCapacity(tx, sat.id, sat.capacity);
+  }
+  return total;
+}
+
+async function hasOpenOrderOnTree(tx: Tx, tableId: string): Promise<boolean> {
+  const open = await tx.order.findFirst({
+    where: {
+      tableId,
+      status: { notIn: ["CLOSED", "CANCELLED"] },
+    },
+    select: { id: true },
+  });
+  if (open) return true;
+  const children = await tx.restaurantTable.findMany({
+    where: { joinedToId: tableId },
+    select: { id: true },
+  });
+  for (const child of children) {
+    if (await hasOpenOrderOnTree(tx, child.id)) return true;
+  }
+  return false;
 }
 
 async function recalcCheck(tx: Tx, checkId: string) {
@@ -61,6 +116,12 @@ export class OrderService {
       });
       if (!table) throw new Error("Mesa no encontrada.");
 
+      if (table.joinedToId) {
+        throw new Error(
+          "Esta mesa está juntada. Abre la mesa principal del par.",
+        );
+      }
+
       const openOrder = await tx.order.findFirst({
         where: {
           tableId: params.tableId,
@@ -83,9 +144,10 @@ export class OrderService {
         select: { ticketNumber: true },
       });
       const ticketNumber = (lastTicket?.ticketNumber ?? 0) + 1;
+      const capacity = await joinedCapacity(tx, table.id, table.capacity);
       const partySize = Math.max(
         1,
-        Math.min(params.partySize ?? table.capacity, 40),
+        Math.min(params.partySize ?? capacity, 40),
       );
 
       const order = await tx.order.create({
@@ -113,12 +175,153 @@ export class OrderService {
         include: { checks: true, seats: true },
       });
 
-      await tx.restaurantTable.update({
-        where: { id: params.tableId },
-        data: { status: "OCCUPIED" },
-      });
+      await syncJoinedTableStatus(tx, params.tableId, "OCCUPIED");
 
       return order;
+    });
+  }
+
+  /**
+   * Join two adjacent floor roots (mitades or already-joined blocks).
+   * Primaries: 10+11→11, 12+13→12, 11+12→11.
+   */
+  async joinTables(params: { tableId: string; partnerId: string }) {
+    return prisma.$transaction(async (tx) => {
+      const [a, b] = await Promise.all([
+        tx.restaurantTable.findUnique({ where: { id: params.tableId } }),
+        tx.restaurantTable.findUnique({ where: { id: params.partnerId } }),
+      ]);
+      if (!a?.active || !b?.active) throw new Error("Mesa no encontrada.");
+      if (a.locationId !== b.locationId) {
+        throw new Error("Las mesas deben ser de la misma sucursal.");
+      }
+
+      const codeA = parseTableCode(a.name);
+      const codeB = parseTableCode(b.name);
+      if (codeA == null || codeB == null) {
+        throw new Error("Solo se pueden juntar mesas del piso (10–83).");
+      }
+      if (!areAdjacent(codeA, codeB)) {
+        throw new Error(
+          "Solo se pueden juntar mesas adyacentes (ej. 10-11, 11-12, 12-13).",
+        );
+      }
+
+      if (a.joinedToId || b.joinedToId) {
+        throw new Error("Usa la mesa principal de cada bloque para juntar.");
+      }
+
+      for (const t of [a, b]) {
+        if (t.status !== "AVAILABLE" && t.status !== "RESERVED") {
+          throw new Error("Solo se pueden juntar mesas libres.");
+        }
+        if (await hasOpenOrderOnTree(tx, t.id)) {
+          throw new Error("No se pueden juntar mesas con cuenta abierta.");
+        }
+      }
+
+      const primaryCode = joinPrimaryCode(codeA, codeB);
+      const primary = primaryCode === codeA ? a : b;
+      const satellite = primary.id === a.id ? b : a;
+
+      await tx.restaurantTable.update({
+        where: { id: satellite.id },
+        data: {
+          joinedToId: primary.id,
+          status: primary.status,
+        },
+      });
+      await syncJoinedTableStatus(tx, satellite.id, primary.status);
+
+      return { primaryId: primary.id, satelliteId: satellite.id };
+    });
+  }
+
+  /**
+   * Detach a satellite (or all direct satellites) from its primary.
+   * Example: separate 11 with satellite 10 → mesas 10 y 11.
+   */
+  async separateTables(params: { tableId: string; satelliteId?: string }) {
+    return prisma.$transaction(async (tx) => {
+      const table = await tx.restaurantTable.findUnique({
+        where: { id: params.tableId },
+      });
+      if (!table?.active) throw new Error("Mesa no encontrada.");
+
+      let primaryId = table.id;
+      let cursor = table;
+      while (cursor.joinedToId) {
+        const parent = await tx.restaurantTable.findUnique({
+          where: { id: cursor.joinedToId },
+        });
+        if (!parent) break;
+        cursor = parent;
+        primaryId = parent.id;
+      }
+
+      // If caller passed a satellite, detach from its direct parent
+      if (params.satelliteId) {
+        const satellite = await tx.restaurantTable.findUnique({
+          where: { id: params.satelliteId },
+        });
+        if (!satellite?.active || !satellite.joinedToId) {
+          throw new Error("Esa mesa no está juntada.");
+        }
+        const parent = await tx.restaurantTable.findUnique({
+          where: { id: satellite.joinedToId },
+        });
+        if (!parent) throw new Error("Mesa principal no encontrada.");
+
+        if (await hasOpenOrderOnTree(tx, parent.id)) {
+          throw new Error("Cierra la cuenta antes de separar en 2 mesas.");
+        }
+        if (
+          parent.status === "OCCUPIED" ||
+          parent.status === "AWAITING_PAYMENT"
+        ) {
+          throw new Error("No se pueden separar mesas ocupadas.");
+        }
+
+        await tx.restaurantTable.update({
+          where: { id: satellite.id },
+          data: { joinedToId: null, status: parent.status },
+        });
+        await syncJoinedTableStatus(tx, satellite.id, parent.status);
+
+        return { primaryId: parent.id, separated: 1 };
+      }
+
+      const primary = await tx.restaurantTable.findUnique({
+        where: { id: primaryId },
+      });
+      if (!primary) throw new Error("Mesa principal no encontrada.");
+
+      if (await hasOpenOrderOnTree(tx, primary.id)) {
+        throw new Error("Cierra la cuenta antes de separar en 2 mesas.");
+      }
+      if (
+        primary.status === "OCCUPIED" ||
+        primary.status === "AWAITING_PAYMENT"
+      ) {
+        throw new Error("No se pueden separar mesas ocupadas.");
+      }
+
+      const satellites = await tx.restaurantTable.findMany({
+        where: { joinedToId: primary.id },
+      });
+      if (satellites.length === 0) {
+        throw new Error("Esta mesa no está juntada.");
+      }
+
+      for (const sat of satellites) {
+        await tx.restaurantTable.update({
+          where: { id: sat.id },
+          data: { joinedToId: null, status: primary.status },
+        });
+        await syncJoinedTableStatus(tx, sat.id, primary.status);
+      }
+
+      return { primaryId: primary.id, separated: satellites.length };
     });
   }
 
@@ -520,9 +723,14 @@ export class OrderService {
       | "CLEANING"
       | "AWAITING_PAYMENT";
   }) {
-    return prisma.restaurantTable.update({
-      where: { id: params.tableId },
-      data: { status: params.status },
+    return prisma.$transaction(async (tx) => {
+      const table = await tx.restaurantTable.findUnique({
+        where: { id: params.tableId },
+      });
+      if (!table) throw new Error("Mesa no encontrada.");
+      const targetId = table.joinedToId ?? table.id;
+      await syncJoinedTableStatus(tx, targetId, params.status);
+      return tx.restaurantTable.findUniqueOrThrow({ where: { id: targetId } });
     });
   }
 
@@ -615,10 +823,7 @@ export class OrderService {
       }
 
       if (order.tableId) {
-        await tx.restaurantTable.update({
-          where: { id: order.tableId },
-          data: { status: "AWAITING_PAYMENT" },
-        });
+        await syncJoinedTableStatus(tx, order.tableId, "AWAITING_PAYMENT");
       }
 
       return { checkCount: 1 + seatChecks.size };
@@ -675,10 +880,7 @@ export class OrderService {
         data: { status: "CLOSED", closedAt: new Date() },
       });
       if (order.tableId) {
-        await tx.restaurantTable.update({
-          where: { id: order.tableId },
-          data: { status: "CLEANING" },
-        });
+        await syncJoinedTableStatus(tx, order.tableId, "CLEANING");
       }
     });
   }

@@ -13,10 +13,12 @@ import {
   itemIdSchema,
   kitchenStatusSchema,
   moveItemsSchema,
+  joinTablesSchema,
   openTableSchema,
   renameCheckSchema,
   renameSeatSchema,
   sendKitchenSchema,
+  separateTablesSchema,
   splitBySeatsSchema,
   splitCustomSchema,
   splitEqualSchema,
@@ -362,6 +364,43 @@ export async function setTableStatusAction(raw: unknown): Promise<ActionResult> 
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo actualizar.",
+    };
+  }
+}
+
+export async function joinTablesAction(raw: unknown): Promise<ActionResult> {
+  try {
+    await assertPermission("pos", "update");
+    const data = joinTablesSchema.parse(raw);
+    await orderService.joinTables(data);
+    revalidatePos(data.tableId);
+    revalidatePos(data.partnerId);
+    return { ok: true, message: "Mesas juntadas." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudieron juntar.",
+    };
+  }
+}
+
+export async function separateTablesAction(raw: unknown): Promise<ActionResult> {
+  try {
+    await assertPermission("pos", "update");
+    const data = separateTablesSchema.parse(raw);
+    await orderService.separateTables(data);
+    revalidatePos(data.tableId);
+    return { ok: true, message: "Mesas separadas." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudieron separar.",
     };
   }
 }

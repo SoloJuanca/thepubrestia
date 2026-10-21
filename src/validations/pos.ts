@@ -89,6 +89,17 @@ export const tableStatusSchema = z.object({
   ]),
 });
 
+export const joinTablesSchema = z.object({
+  tableId: z.string().min(1),
+  partnerId: z.string().min(1),
+});
+
+export const separateTablesSchema = z.object({
+  tableId: z.string().min(1),
+  /** Detach only this satellite (e.g. 10 from 11). */
+  satelliteId: z.string().min(1).optional(),
+});
+
 export const endSessionSchema = z.object({
   orderId: z.string().min(1),
   forceCleaning: z.boolean().optional(),

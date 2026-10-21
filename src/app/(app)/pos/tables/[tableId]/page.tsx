@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { differenceInMinutes } from "date-fns";
 import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
@@ -33,9 +33,44 @@ export default async function PosTablePage({ params }: Props) {
   });
   if (!table || !table.active) notFound();
 
+  if (table.joinedToId) {
+    let rootId = table.joinedToId;
+    for (let i = 0; i < 8; i++) {
+      const parent = await prisma.restaurantTable.findUnique({
+        where: { id: rootId },
+        select: { id: true, joinedToId: true },
+      });
+      if (!parent?.joinedToId) break;
+      rootId = parent.joinedToId;
+    }
+    redirect(`/pos/tables/${rootId}`);
+  }
+
+  const floorTables = await prisma.restaurantTable.findMany({
+    where: { locationId: table.locationId, active: true },
+    select: { id: true, name: true, capacity: true, joinedToId: true },
+  });
+  const groupIds = new Set<string>([table.id]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const t of floorTables) {
+      if (t.joinedToId && groupIds.has(t.joinedToId) && !groupIds.has(t.id)) {
+        groupIds.add(t.id);
+        grew = true;
+      }
+    }
+  }
+  const group = floorTables.filter((t) => groupIds.has(t.id));
+  const joinedCapacity = group.reduce((sum, t) => sum + t.capacity, 0);
+  const displayName = group
+    .map((t) => t.name)
+    .sort((a, b) => Number(a) - Number(b) || a.localeCompare(b))
+    .join(" + ");
+
   let order = await prisma.order.findFirst({
     where: {
-      tableId,
+      tableId: table.id,
       status: { notIn: ["CLOSED", "CANCELLED"] },
     },
     include: orderInclude,
@@ -47,7 +82,7 @@ export default async function PosTablePage({ params }: Props) {
       locationId: table.locationId,
       tableId: table.id,
       waiterId: user.id,
-      partySize: table.capacity,
+      partySize: joinedCapacity,
     });
     order = await prisma.order.findUniqueOrThrow({
       where: { id: created.id },
@@ -85,7 +120,7 @@ export default async function PosTablePage({ params }: Props) {
     <TableSessionView
       session={{
         tableId: table.id,
-        tableName: table.name,
+        tableName: displayName,
         orderId: order.id,
         ticketNumber: order.ticketNumber,
         partySize: order.partySize,

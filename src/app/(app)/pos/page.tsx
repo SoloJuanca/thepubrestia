@@ -81,6 +81,7 @@ export default async function PosPage() {
           name: table.name,
           capacity: table.capacity,
           status: table.status,
+          joinedToId: table.joinedToId,
           openOrderId: order?.id ?? null,
           openMinutes: order
             ? differenceInMinutes(new Date(), order.openedAt)

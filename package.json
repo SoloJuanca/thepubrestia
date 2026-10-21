@@ -22,6 +22,7 @@
     "db:seed:bebidas-conteo": "tsx prisma/seed-inventario-bebidas-conteo.ts",
     "db:seed:bebidas-conteo-2": "tsx prisma/seed-inventario-bebidas-conteo-pendientes.ts",
     "db:seed:staff": "tsx prisma/seed-staff-alena.ts",
+    "db:seed:mesas": "tsx prisma/seed-mesas-alena.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
     "test": "vitest run",
