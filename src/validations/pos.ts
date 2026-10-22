@@ -38,6 +38,11 @@ export const updateQtySchema = z.object({
   quantity: z.coerce.number().int().min(1),
 });
 
+export const updateItemNotesSchema = z.object({
+  orderItemId: z.string().min(1),
+  notes: z.string().max(300).optional().nullable(),
+});
+
 export const itemIdSchema = z.object({
   orderItemId: z.string().min(1),
 });

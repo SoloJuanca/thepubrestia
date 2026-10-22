@@ -100,6 +100,7 @@ export default async function TakeoutOrderPage({ params }: Props) {
             lineTotal: Number(item.lineTotal).toFixed(2),
             status: item.status,
             modifiers: item.modifiers.map((modifier) => modifier.nameSnapshot),
+            notes: item.notes,
             seatId: item.seatId,
           })),
         })),

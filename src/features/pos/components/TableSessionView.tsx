@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -20,6 +21,7 @@ import {
   endTableSessionAction,
   removeOrderItemAction,
   sendToKitchenAction,
+  updateItemNotesAction,
   updateItemQtyAction,
 } from "@/features/pos/actions";
 import { PaymentSheet } from "@/features/payments/components/PaymentSheet";
@@ -63,6 +65,7 @@ export type PosCheck = {
     lineTotal: string;
     status: string;
     modifiers: string[];
+    notes: string | null;
     seatId: string | null;
   }>;
 };
@@ -104,6 +107,7 @@ export function TableSessionView({ session }: Props) {
   const [modifierItem, setModifierItem] = useState<PosMenuItem | null>(null);
   const [selectedMods, setSelectedMods] = useState<string[]>([]);
   const [qty, setQty] = useState(1);
+  const [itemNote, setItemNote] = useState("");
   const [payOpen, setPayOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [payCheckId, setPayCheckId] = useState<string | null>(null);
@@ -142,6 +146,7 @@ export function TableSessionView({ session }: Props) {
   function openModifiers(item: PosMenuItem) {
     setModifierItem(item);
     setQty(1);
+    setItemNote("");
     const defaults: string[] = [];
     for (const g of item.modifierGroups) {
       if (g.required && g.options[0]) defaults.push(g.options[0].id);
@@ -149,7 +154,12 @@ export function TableSessionView({ session }: Props) {
     setSelectedMods(defaults);
   }
 
-  function addItem(menuItemId: string, mods: string[], quantity: number) {
+  function addItem(
+    menuItemId: string,
+    mods: string[],
+    quantity: number,
+    notes?: string,
+  ) {
     if (!activeCheck || activeCheck.status !== "OPEN") return;
     startTransition(async () => {
       const result = await addOrderItemAction({
@@ -158,21 +168,19 @@ export function TableSessionView({ session }: Props) {
         quantity,
         modifierOptionIds: mods,
         seatId,
+        notes: notes?.trim() || null,
       });
       if (!result.ok) toast.error(result.error);
       else {
         toast.success("Agregado");
         setModifierItem(null);
+        setItemNote("");
       }
     });
   }
 
   function quickAdd(item: PosMenuItem) {
-    if (item.modifierGroups.length > 0) {
-      openModifiers(item);
-      return;
-    }
-    addItem(item.id, [], 1);
+    openModifiers(item);
   }
 
   return (
@@ -327,10 +335,20 @@ export function TableSessionView({ session }: Props) {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {seatLabel(item.seatId)}
+                      {item.modifiers.length
+                        ? ` · ${item.modifiers.join(", ")}`
+                        : ""}
                     </p>
                   </div>
                   <p className="font-semibold">${item.lineTotal}</p>
                 </div>
+                {activeCheck.status === "OPEN" ? (
+                  <ItemKitchenNote itemId={item.id} notes={item.notes} />
+                ) : item.notes ? (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Cocina: {item.notes}
+                  </p>
+                ) : null}
                 {activeCheck.status === "OPEN" ? (
                   <div className="mt-2 flex gap-1">
                     <Button
@@ -555,10 +573,20 @@ export function TableSessionView({ session }: Props) {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {seatLabel(item.seatId)}
+                        {item.modifiers.length
+                          ? ` · ${item.modifiers.join(", ")}`
+                          : ""}
                       </p>
                     </div>
                     <p className="font-semibold">${item.lineTotal}</p>
                   </div>
+                  {activeCheck?.status === "OPEN" ? (
+                    <ItemKitchenNote itemId={item.id} notes={item.notes} />
+                  ) : item.notes ? (
+                    <p className="mt-1 text-xs text-amber-700">
+                      Cocina: {item.notes}
+                    </p>
+                  ) : null}
                 </div>
               ))
             ) : (
@@ -694,6 +722,17 @@ export function TableSessionView({ session }: Props) {
                   </div>
                 </div>
               ))}
+              <div className="space-y-2">
+                <Label htmlFor="kitchen-note">Comentario para cocina</Label>
+                <Textarea
+                  id="kitchen-note"
+                  value={itemNote}
+                  onChange={(e) => setItemNote(e.target.value)}
+                  placeholder="Ej. hamburguesa sin verdura"
+                  maxLength={300}
+                  rows={2}
+                />
+              </div>
               <div className="flex items-center gap-3">
                 <Button
                   variant="outline"
@@ -712,7 +751,7 @@ export function TableSessionView({ session }: Props) {
                 className="min-h-12 w-full"
                 disabled={pending}
                 onClick={() =>
-                  addItem(modifierItem.id, selectedMods, qty)
+                  addItem(modifierItem.id, selectedMods, qty, itemNote)
                 }
               >
                 Agregar
@@ -722,6 +761,50 @@ export function TableSessionView({ session }: Props) {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+function ItemKitchenNote({
+  itemId,
+  notes,
+}: {
+  itemId: string;
+  notes: string | null;
+}) {
+  const [value, setValue] = useState(notes ?? "");
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setValue(notes ?? "");
+  }, [notes]);
+
+  function save() {
+    const next = value.trim();
+    if (next === (notes ?? "").trim()) return;
+    startTransition(async () => {
+      const result = await updateItemNotesAction({
+        orderItemId: itemId,
+        notes: next || null,
+      });
+      if (!result.ok) toast.error(result.error);
+    });
+  }
+
+  return (
+    <input
+      className="mt-2 flex h-9 w-full rounded-lg border border-input bg-transparent px-2 text-xs"
+      value={value}
+      maxLength={300}
+      placeholder="Comentario para cocina"
+      disabled={pending}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        }
+      }}
+    />
   );
 }
 

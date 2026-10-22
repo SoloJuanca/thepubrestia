@@ -491,7 +491,7 @@ export class OrderService {
           taxAmount: amounts.taxAmount,
           lineTotal: amounts.lineTotal,
           status: "OPEN",
-          notes: params.notes ?? null,
+          notes: params.notes?.trim() || null,
           modifiers: {
             create: selectedOptions.map((o) => ({
               modifierOptionId: o.id,
@@ -505,6 +505,23 @@ export class OrderService {
 
       await recalcCheck(tx, params.checkId);
       return item;
+    });
+  }
+
+  async updateItemNotes(params: { orderItemId: string; notes?: string | null }) {
+    const item = await prisma.orderItem.findUnique({
+      where: { id: params.orderItemId },
+      include: { check: { include: { order: true } } },
+    });
+    if (!item || item.status === "CANCELLED" || item.check.status !== "OPEN") {
+      throw new Error("No se puede anotar este producto.");
+    }
+    if (["CLOSED", "CANCELLED"].includes(item.check.order.status)) {
+      throw new Error("La orden está cerrada.");
+    }
+    return prisma.orderItem.update({
+      where: { id: item.id },
+      data: { notes: params.notes?.trim() || null },
     });
   }
 

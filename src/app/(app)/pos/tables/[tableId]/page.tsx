@@ -149,6 +149,7 @@ export default async function PosTablePage({ params }: Props) {
             lineTotal: Number(item.lineTotal).toFixed(2),
             status: item.status,
             modifiers: item.modifiers.map((m) => m.nameSnapshot),
+            notes: item.notes,
             seatId: item.seatId,
           })),
         })),

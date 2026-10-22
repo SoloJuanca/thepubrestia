@@ -24,6 +24,7 @@ import {
   splitCustomSchema,
   splitEqualSchema,
   tableStatusSchema,
+  updateItemNotesSchema,
   updateQtySchema,
 } from "@/validations/pos";
 
@@ -162,6 +163,26 @@ export async function addOrderItemAction(raw: unknown): Promise<ActionResult> {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo agregar.",
+    };
+  }
+}
+
+export async function updateItemNotesAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    await assertPermission("pos", "update");
+    const data = updateItemNotesSchema.parse(raw);
+    await orderService.updateItemNotes(data);
+    revalidatePos();
+    return { ok: true, message: "Comentario guardado." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo guardar el comentario.",
     };
   }
 }
