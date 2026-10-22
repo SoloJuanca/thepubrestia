@@ -454,6 +454,7 @@ model ModifierGroup {
   menuItem MenuItem         @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   options  ModifierOption[]
 
+  @@unique([menuItemId, name])
   @@index([menuItemId])
 }
 
@@ -757,6 +758,8 @@ model Order {
   locationId          String
   tableId             String?
   waiterId            String?
+  /// Set when the order is takeout (no table). Shown as the customer name.
+  guestName           String?
   status              OrderStatus @default(OPEN)
   ticketNumber        Int?
   partySize           Int?

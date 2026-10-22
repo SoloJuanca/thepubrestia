@@ -1,4 +1,5 @@
 import { LoginForm } from "@/features/auth/components/LoginForm";
+import { prisma } from "@/lib/prisma";
 
 type Props = {
   searchParams: Promise<{ callbackUrl?: string }>;
@@ -19,6 +20,23 @@ export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams;
   const callbackUrl = safeCallbackUrl(params.callbackUrl);
 
+  const staff = await prisma.user
+    .findMany({
+      where: {
+        active: true,
+        type: "EMPLOYEE",
+        email: { endsWith: "@thepubalenasur.com.mx" },
+      },
+      select: { name: true, email: true },
+      orderBy: { name: "asc" },
+    })
+    .then((rows) =>
+      rows
+        .filter((row) => row.name)
+        .map((row) => ({ name: row.name as string, email: row.email })),
+    )
+    .catch(() => [] as Array<{ name: string; email: string }>);
+
   return (
     <main className="relative flex min-h-svh items-center justify-center overflow-hidden px-4">
       <div
@@ -30,7 +48,7 @@ export default async function LoginPage({ searchParams }: Props) {
         className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(oklch(1_0_0_/0.04)_1px,transparent_1px),linear-gradient(90deg,oklch(1_0_0_/0.04)_1px,transparent_1px)] [background-size:48px_48px]"
       />
       <div className="relative z-10 w-full max-w-md">
-        <LoginForm callbackUrl={callbackUrl} />
+        <LoginForm callbackUrl={callbackUrl} staff={staff} />
       </div>
     </main>
   );

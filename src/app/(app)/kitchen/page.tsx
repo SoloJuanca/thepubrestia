@@ -44,7 +44,11 @@ export default async function KitchenPage() {
     <KitchenBoard
       tickets={items.map((item) => ({
         orderItemId: item.id,
-        tableName: item.check.order.table?.name ?? "Sin mesa",
+        tableName: item.check.order.table?.name
+          ? item.check.order.table.name
+          : item.check.order.guestName
+            ? `Llevar · ${item.check.order.guestName}`
+            : "Sin mesa",
         checkName: item.check.name,
         itemName: item.nameSnapshot,
         quantity: item.quantity,

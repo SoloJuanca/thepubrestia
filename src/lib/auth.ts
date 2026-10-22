@@ -6,8 +6,21 @@ import Resend from "next-auth/providers/resend";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
+const STAFF_DOMAIN = "thepubalenasur.com.mx";
+
+/** Full email, or a short name like "mer" / "lazaro". */
+export function resolveEmployeeEmail(raw: string): string {
+  const value = raw
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+  if (!value || value.includes("@")) return value;
+  return `${value}@${STAFF_DOMAIN}`;
+}
+
 const credentialsSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(1).max(160),
   password: z.string().min(6),
 });
 
@@ -32,7 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const parsed = credentialsSchema.safeParse(raw);
           if (!parsed.success) return null;
 
-          const email = parsed.data.email.toLowerCase();
+          const email = resolveEmployeeEmail(parsed.data.email);
           const user = await prisma.user.findUnique({
             where: { email },
             include: {

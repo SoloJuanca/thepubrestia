@@ -49,6 +49,12 @@ const STAFF: Array<{
     role: "ADMIN",
     jobTitle: "Administrador",
   },
+  {
+    email: "cocina@thepubalenasur.com.mx",
+    name: "Cocina",
+    role: "KITCHEN_LEAD",
+    jobTitle: "Tablet de cocina",
+  },
 ];
 
 async function main() {
@@ -84,6 +90,7 @@ async function main() {
           passwordHash,
           type: "EMPLOYEE",
           active: true,
+          emailVerified: new Date(),
           roles: { create: { roleId: role.id } },
           employeeProfile: {
             create: {
@@ -107,9 +114,9 @@ async function main() {
         where: { id: user.id },
         data: {
           name: person.name,
-          passwordHash,
           active: true,
           type: "EMPLOYEE",
+          emailVerified: user.emailVerified ?? new Date(),
         },
       });
       await prisma.userRole.deleteMany({ where: { userId: user.id } });
@@ -141,12 +148,12 @@ async function main() {
         );
       }
       updated += 1;
-      console.log(`~ ${email} · ${person.role} (actualizado + password temp)`);
+      console.log(`~ ${email} · ${person.role} (actualizado, contraseña intacta)`);
     }
   }
 
   console.log(
-    `\nListo · nuevos=${created} actualizados=${updated}\nContraseña temporal para todos: ${TEMP_PASSWORD}\nPedir que la cambien en /account (Mi cuenta).`,
+    `\nListo · nuevos=${created} actualizados=${updated}\nContraseña temporal de cuentas nuevas: ${TEMP_PASSWORD}\nLas cuentas que ya existían conservan su contraseña.`,
   );
 }
 

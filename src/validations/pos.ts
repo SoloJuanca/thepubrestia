@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const openTakeoutSchema = z.object({
+  guestName: z.string().trim().min(1, "Escribe el nombre").max(80),
+  notes: z.string().max(500).optional().nullable(),
+  waiterId: z.string().optional().nullable(),
+});
+
 export const openTableSchema = z.object({
   tableId: z.string().min(1),
   checkName: z.string().max(80).optional(),

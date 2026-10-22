@@ -181,6 +181,52 @@ export class OrderService {
     });
   }
 
+  /** Takeout order identified by the customer's name. No table. */
+  async openTakeout(params: {
+    locationId: string;
+    waiterId: string;
+    guestName: string;
+    notes?: string | null;
+  }) {
+    const guestName = params.guestName.trim();
+    if (!guestName) throw new Error("Escribe el nombre del pedido.");
+
+    return prisma.$transaction(async (tx) => {
+      const lastTicket = await tx.order.findFirst({
+        where: { locationId: params.locationId, ticketNumber: { not: null } },
+        orderBy: { ticketNumber: "desc" },
+        select: { ticketNumber: true },
+      });
+      const ticketNumber = (lastTicket?.ticketNumber ?? 0) + 1;
+
+      return tx.order.create({
+        data: {
+          locationId: params.locationId,
+          tableId: null,
+          guestName,
+          waiterId: params.waiterId,
+          status: "OPEN",
+          ticketNumber,
+          partySize: 1,
+          notes: params.notes?.trim() || null,
+          checks: {
+            create: {
+              name: guestName,
+              status: "OPEN",
+            },
+          },
+          seats: {
+            create: {
+              label: guestName,
+              sortOrder: 0,
+            },
+          },
+        },
+        include: { checks: true, seats: true },
+      });
+    });
+  }
+
   /**
    * Join two adjacent floor roots (mitades or already-joined blocks).
    * Primaries: 10+11→11, 12+13→12, 11+12→11.

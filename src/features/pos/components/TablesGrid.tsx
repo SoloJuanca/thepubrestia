@@ -454,12 +454,22 @@ export function TablesGrid({ tables, waiters, currentUserId }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-          Mesas
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Piso 8×4 · 11→10+11 · 12→12+13 · también se juntan 11+12
-        </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+              Mesas
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Piso 8×4 · 11→10+11 · 12→12+13 · también se juntan 11+12
+            </p>
+          </div>
+          <Link
+            href="/takeout"
+            className="inline-flex h-9 items-center rounded-md bg-[var(--pub-blue)] px-3 text-sm font-medium text-white hover:bg-[var(--pub-blue)]/90"
+          >
+            Para llevar
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">

@@ -81,6 +81,9 @@ export type PosSession = {
   partySize: number | null;
   openMinutes: number;
   waiterName: string | null;
+  mode?: "table" | "takeout";
+  backHref?: string;
+  backLabel?: string;
   checks: PosCheck[];
   seats: PosSeat[];
   categories: PosCategory[];
@@ -126,8 +129,12 @@ export function TableSessionView({ session }: Props) {
     });
   }, [session.menuItems, categoryId, search]);
 
+  const takeout = session.mode === "takeout";
+  const backHref = session.backHref ?? (takeout ? "/takeout" : "/pos");
+  const backLabel = session.backLabel ?? (takeout ? "← Para llevar" : "← Mesas");
+
   function seatLabel(id: string | null) {
-    if (!id) return "Toda la mesa";
+    if (!id) return takeout ? "Pedido" : "Toda la mesa";
     const seat = session.seats.find((s) => s.id === id);
     return seat?.displayName || seat?.label || "Persona";
   }
@@ -174,16 +181,18 @@ export function TableSessionView({ session }: Props) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Link
-              href="/pos"
+              href={backHref}
               className="text-sm text-muted-foreground hover:text-foreground"
             >
-              ← Mesas
+              {backLabel}
             </Link>
             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
               {session.tableName}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {session.partySize ?? "—"} personas · {session.openMinutes} min
+              {takeout
+                ? `Para llevar · ${session.openMinutes} min`
+                : `${session.partySize ?? "—"} personas · ${session.openMinutes} min`}
               {session.waiterName ? ` · Mesero: ${session.waiterName}` : ""}
             </p>
           </div>
@@ -464,13 +473,13 @@ export function TableSessionView({ session }: Props) {
                   });
                   if (!result.ok) toast.error(result.error);
                   else {
-                    toast.success("Mesa cerrada");
-                    router.push("/pos");
+                    toast.success(takeout ? "Pedido cerrado" : "Mesa cerrada");
+                    router.push(backHref);
                   }
                 })
               }
             >
-              Cerrar mesa
+              {takeout ? "Cerrar pedido" : "Cerrar mesa"}
             </Button>
           ) : null}
         </div>

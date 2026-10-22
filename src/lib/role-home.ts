@@ -52,6 +52,12 @@ const HUB_PATHS: Record<RolePersona, HubPath[]> = {
       resource: "pos",
     },
     {
+      title: "Para llevar",
+      description: "Pedido por nombre, sin mesa",
+      href: "/takeout",
+      resource: "pos",
+    },
+    {
       title: "Órdenes activas",
       description: "Ver qué ya se envió a cocina",
       href: "/orders",
@@ -69,6 +75,12 @@ const HUB_PATHS: Record<RolePersona, HubPath[]> = {
       title: "Cobrar",
       description: "Mesas con cuenta abierta o por cobrar",
       href: "/pos",
+      resource: "pos",
+    },
+    {
+      title: "Para llevar",
+      description: "Pedidos por nombre listos para cobrar",
+      href: "/takeout",
       resource: "pos",
     },
     {
@@ -223,10 +235,11 @@ export const PERSONA_LABELS: Record<RolePersona, string> = {
 
 /** Primary sidebar hrefs (pathname or path without query) per persona. */
 export const PRIMARY_NAV_HREFS: Record<RolePersona, string[]> = {
-  waiter: ["/dashboard", "/pos", "/orders", "/attendance"],
+  waiter: ["/dashboard", "/pos", "/takeout", "/orders", "/attendance"],
   cashier: [
     "/dashboard",
     "/pos",
+    "/takeout",
     "/daily-close",
     "/expenses",
     "/attendance",
@@ -248,6 +261,7 @@ export const PRIMARY_NAV_HREFS: Record<RolePersona, string[]> = {
   manager: [
     "/dashboard",
     "/pos",
+    "/takeout",
     "/kitchen",
     "/inventory",
     "/purchases",
@@ -256,6 +270,7 @@ export const PRIMARY_NAV_HREFS: Record<RolePersona, string[]> = {
   admin: [
     "/dashboard",
     "/pos",
+    "/takeout",
     "/kitchen",
     "/inventory",
     "/purchases",

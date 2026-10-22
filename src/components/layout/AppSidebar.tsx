@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   UtensilsCrossed,
+  ShoppingBag,
   ClipboardList,
   CookingPot,
   BookOpen,
@@ -33,6 +34,7 @@ import { isNavActive } from "@/lib/nav-split";
 const ICONS: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
   "/pos": UtensilsCrossed,
+  "/takeout": ShoppingBag,
   "/orders": ClipboardList,
   "/kitchen": CookingPot,
   "/daily-close": CalendarCheck2,

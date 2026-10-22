@@ -36,7 +36,11 @@ export default async function TicketPage({ params }: Props) {
         email: BRAND.email,
         website: BRAND.website,
         ticketNumber: check.order.ticketNumber,
-        tableName: check.order.table?.name ?? null,
+        tableName: check.order.table?.name
+          ? check.order.table.name
+          : check.order.guestName
+            ? `Para llevar · ${check.order.guestName}`
+            : null,
         waiterName:
           check.order.waiter?.name ?? check.order.waiter?.email ?? null,
         checkName: check.name,

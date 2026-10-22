@@ -44,6 +44,7 @@ export default async function OrdersPage() {
           ticketNumber: order.ticketNumber,
           tableName: order.table?.name ?? null,
           tableId: order.tableId,
+          guestName: order.guestName,
           status: order.status,
           waiterName: order.waiter?.name ?? order.waiter?.email ?? null,
           openedAt: order.openedAt,

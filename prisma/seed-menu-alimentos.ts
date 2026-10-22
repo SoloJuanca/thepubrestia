@@ -556,14 +556,15 @@ export async function seedMenuAlimentos(locationId: string) {
       });
       productsUpserted += 1;
 
-      // Replace modifier groups to match catalog exactly
-      if (item.modifierGroups.length > 0) {
-        await prisma.modifierGroup.deleteMany({
-          where: { menuItemId: item.id },
-        });
-      }
+      await prisma.modifierGroup.deleteMany({
+        where: { menuItemId: item.id },
+      });
 
+      const seenGroups = new Set<string>();
       for (const [gIdx, group] of product.option_groups.entries()) {
+        const key = group.name.trim().toLowerCase();
+        if (seenGroups.has(key)) continue;
+        seenGroups.add(key);
         await prisma.modifierGroup.create({
           data: {
             menuItemId: item.id,

@@ -17,6 +17,7 @@ export type OrderListRow = {
   ticketNumber: number | null;
   tableName: string | null;
   tableId: string | null;
+  guestName: string | null;
   status: string;
   waiterName: string | null;
   openedAt: Date;
@@ -41,7 +42,7 @@ export function OrdersList({ orders }: Props) {
         <TableHeader>
           <TableRow>
             <TableHead>Ticket</TableHead>
-            <TableHead>Mesa</TableHead>
+            <TableHead>Mesa / nombre</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead>Mesero</TableHead>
             <TableHead>Tiempo</TableHead>
@@ -53,7 +54,10 @@ export function OrdersList({ orders }: Props) {
           {orders.map((order) => (
             <TableRow key={order.id}>
               <TableCell>#{order.ticketNumber ?? "—"}</TableCell>
-              <TableCell>{order.tableName ?? "—"}</TableCell>
+              <TableCell>
+                {order.tableName ??
+                  (order.guestName ? `Para llevar · ${order.guestName}` : "—")}
+              </TableCell>
               <TableCell>
                 <Badge variant="secondary">{order.status}</Badge>
               </TableCell>
@@ -71,9 +75,13 @@ export function OrdersList({ orders }: Props) {
                 </span>
               </TableCell>
               <TableCell className="text-right">
-                {order.tableId ? (
+                {order.tableId || order.guestName ? (
                   <Link
-                    href={`/pos/tables/${order.tableId}`}
+                    href={
+                      order.tableId
+                        ? `/pos/tables/${order.tableId}`
+                        : `/takeout/${order.id}`
+                    }
                     className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
                   >
                     Abrir

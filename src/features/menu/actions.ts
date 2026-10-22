@@ -37,7 +37,15 @@ async function syncModifierGroups(
   });
   await tx.modifierGroup.deleteMany({ where: { menuItemId } });
 
-  for (const [gIndex, group] of groups.entries()) {
+  const seen = new Set<string>();
+  const uniqueGroups = groups.filter((group) => {
+    const key = group.name.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  for (const [gIndex, group] of uniqueGroups.entries()) {
     await tx.modifierGroup.create({
       data: {
         menuItemId,

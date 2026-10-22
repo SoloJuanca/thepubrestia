@@ -15,6 +15,7 @@ import {
   moveItemsSchema,
   joinTablesSchema,
   openTableSchema,
+  openTakeoutSchema,
   renameCheckSchema,
   renameSeatSchema,
   sendKitchenSchema,
@@ -30,12 +31,14 @@ export type ActionResult =
   | { ok: true; message?: string; id?: string; count?: number }
   | { ok: false; error: string };
 
-function revalidatePos(tableId?: string) {
+function revalidatePos(tableId?: string, orderId?: string) {
   revalidatePath("/pos");
+  revalidatePath("/takeout", "layout");
   revalidatePath("/orders");
   revalidatePath("/kitchen");
   revalidatePath("/dashboard");
   if (tableId) revalidatePath(`/pos/tables/${tableId}`);
+  if (orderId) revalidatePath(`/takeout/${orderId}`);
 }
 
 async function resolveLocationId(userId: string) {
@@ -73,6 +76,31 @@ export async function openTableAction(raw: unknown): Promise<ActionResult> {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo abrir la mesa.",
+    };
+  }
+}
+
+export async function openTakeoutAction(raw: unknown): Promise<ActionResult> {
+  try {
+    const { user } = await assertPermission("pos", "create");
+    const data = openTakeoutSchema.parse(raw);
+    const locationId = await resolveLocationId(user.id);
+    const order = await orderService.openTakeout({
+      locationId,
+      waiterId: data.waiterId || user.id,
+      guestName: data.guestName,
+      notes: data.notes,
+    });
+    revalidatePos(undefined, order.id);
+    return { ok: true, message: "Pedido para llevar abierto.", id: order.id };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "No se pudo abrir el pedido.",
     };
   }
 }
