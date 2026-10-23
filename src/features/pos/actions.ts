@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { assertPermission, AuthorizationError } from "@/lib/rbac";
+import { waitUntil } from "@vercel/functions";
+import { publishLive } from "@/lib/live";
 import { orderService } from "@/services/order.service";
 import {
   addCheckSchema,
@@ -40,6 +42,13 @@ function revalidatePos(tableId?: string, orderId?: string) {
   revalidatePath("/dashboard");
   if (tableId) revalidatePath(`/pos/tables/${tableId}`);
   if (orderId) revalidatePath(`/takeout/${orderId}`);
+  const job = publishLive();
+  void job;
+  try {
+    waitUntil(job);
+  } catch {
+    // next dev no tiene el contexto de Vercel; la promesa sigue en este proceso.
+  }
 }
 
 async function resolveLocationId(userId: string) {
@@ -239,6 +248,29 @@ export async function sendToKitchenAction(raw: unknown): Promise<ActionResult> {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo enviar.",
+    };
+  }
+}
+
+export async function markItemDeliveredAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    await assertPermission("pos", "update");
+    const data = itemIdSchema.parse(raw);
+    await orderService.updateKitchenItemStatus({
+      orderItemId: data.orderItemId,
+      status: "DELIVERED",
+    });
+    revalidatePos();
+    return { ok: true, message: "Marcado como entregado." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo marcar entregado.",
     };
   }
 }

@@ -1,12 +1,21 @@
 export const UNIT_LABELS: Record<string, string> = {
-  KG: "kg",
-  G: "g",
-  L: "L",
-  ML: "ml",
-  UNIT: "unidad",
-  BOX: "caja",
-  PACK: "paquete",
+  KG: "kilos",
+  G: "gramos",
+  L: "litros",
+  ML: "mililitros",
+  UNIT: "piezas",
+  BOX: "cajas",
+  PACK: "paquetes",
 };
+
+/** Unidades con las que se cuenta el stock en el día a día. */
+export const COUNT_UNITS = ["UNIT", "KG", "L"] as const;
+
+export function unitChoices(current?: string | null) {
+  const choices: string[] = [...COUNT_UNITS];
+  if (current && !choices.includes(current)) choices.push(current);
+  return choices;
+}
 
 export const WASTE_REASON_LABELS: Record<string, string> = {
   DAMAGED: "Producto dañado",
@@ -29,10 +38,10 @@ export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
 };
 
 export const INGREDIENT_KIND_LABELS: Record<string, string> = {
-  RAW: "Crudo",
-  PREP: "Producción",
-  FROZEN: "Congelado",
-  PACKAGED: "Empaquetado",
+  RAW: "Insumo",
+  PREP: "Preparado",
+  FROZEN: "Insumo",
+  PACKAGED: "Insumo",
 };
 
 export const KIND_OPTIONS = ["RAW", "PREP", "FROZEN", "PACKAGED"] as const;

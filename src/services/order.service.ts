@@ -671,6 +671,22 @@ export class OrderService {
         });
       }
 
+      if (params.status === "DELIVERED") {
+        const stillInKitchen = await tx.orderItem.count({
+          where: {
+            id: { not: item.id },
+            status: { in: ["SENT_TO_KITCHEN", "PREPARING", "READY"] },
+            check: { orderId: item.check.orderId },
+          },
+        });
+        if (stillInKitchen === 0 && item.check.order.status !== "CLOSED") {
+          await tx.order.update({
+            where: { id: item.check.orderId },
+            data: { status: "DELIVERED" },
+          });
+        }
+      }
+
       return true;
     });
   }

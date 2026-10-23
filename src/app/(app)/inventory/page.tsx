@@ -89,7 +89,13 @@ export default async function InventoryPage({
   ] = await Promise.all([
     needAlerts
       ? inventoryService.getStockAlerts(location.id)
-      : Promise.resolve({ low: [], out: [], suggested: [] }),
+      : Promise.resolve({
+          low: [],
+          out: [],
+          suggested: [],
+          stalePrepared: [],
+          stalePerishable: [],
+        }),
     needIngredients
       ? prisma.ingredient.findMany({
           where: { locationId: location.id },
@@ -191,6 +197,8 @@ export default async function InventoryPage({
             : "0",
           preferredSupplierId: ing.preferredSupplierId,
           preferredSupplierName: ing.preferredSupplier?.name ?? null,
+          perishable: ing.perishable,
+          stockedAt: ing.stockedAt ? ing.stockedAt.toISOString() : null,
           active: ing.active,
         }))}
         menuItems={menuItems

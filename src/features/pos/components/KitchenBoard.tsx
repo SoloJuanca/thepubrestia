@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { updateKitchenStatusAction } from "@/features/pos/actions";
+import { useLiveRefresh } from "@/features/pos/hooks/useLiveRefresh";
 
 export type KitchenTicket = {
   orderItemId: string;
@@ -21,22 +22,21 @@ export type KitchenTicket = {
 
 type Props = { tickets: KitchenTicket[] };
 
-const NEXT: Record<string, "PREPARING" | "READY" | "DELIVERED" | null> = {
+const NEXT: Record<string, "PREPARING" | "READY" | null> = {
   SENT_TO_KITCHEN: "PREPARING",
   PREPARING: "READY",
-  READY: "DELIVERED",
-  DELIVERED: null,
+  READY: null,
 };
 
 const NEXT_LABEL: Record<string, string> = {
   PREPARING: "Preparar",
   READY: "Listo",
-  DELIVERED: "Entregado",
 };
 
 export function KitchenBoard({ tickets }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  useLiveRefresh();
 
   const groups = {
     SENT_TO_KITCHEN: tickets.filter((t) => t.status === "SENT_TO_KITCHEN"),
@@ -65,7 +65,7 @@ export function KitchenBoard({ tickets }: Props) {
             Cocina
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cola de preparación · toques grandes
+            En vivo. El mesero marca entregado cuando lo lleva.
           </p>
         </div>
         <Button
@@ -152,7 +152,11 @@ function KitchenColumn({
                 >
                   {NEXT_LABEL[next]}
                 </Button>
-              ) : null}
+              ) : (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Listo para que el mesero lo entregue
+                </p>
+              )}
             </div>
           );
         })

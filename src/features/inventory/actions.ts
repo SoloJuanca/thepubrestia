@@ -5,11 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { assertPermission, AuthorizationError } from "@/lib/rbac";
 import { inventoryService } from "@/services/inventory.service";
 import { productionService } from "@/services/production.service";
+import { isPrepared, looksPerishable } from "@/features/inventory/stock-rules";
 import {
   adjustStockSchema,
   bulkUpdateIngredientsSchema,
   createIngredientSchema,
   deleteIngredientsSchema,
+  markLotTodaySchema,
   runProductionBatchSchema,
   savePrepRecipeSchema,
   saveRecipeSchema,
@@ -54,6 +56,10 @@ export async function createIngredientAction(
           targetStock: data.targetStock ?? null,
           averageCost: data.averageCost,
           preferredSupplierId: emptyToNull(data.preferredSupplierId),
+          perishable: isPrepared(data.kind)
+            ? false
+            : (data.perishable ??
+              looksPerishable(data.name, data.category)),
           active: data.active,
         },
       });
@@ -139,6 +145,12 @@ export async function updateIngredientAction(
           data.preferredSupplierId === undefined
             ? undefined
             : emptyToNull(data.preferredSupplierId),
+        perishable:
+          data.perishable === undefined
+            ? undefined
+            : isPrepared(data.kind ?? existing.kind)
+              ? false
+              : data.perishable,
         active: data.active,
       },
     });
@@ -442,6 +454,27 @@ export async function deleteIngredientsAction(
         error instanceof Error
           ? error.message
           : "No se pudo eliminar.",
+    };
+  }
+}
+
+export async function markLotTodayAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  try {
+    await assertPermission("inventory", "adjust");
+    const data = markLotTodaySchema.parse(raw);
+    await inventoryService.markLotToday(data.ingredientId);
+    revalidateInventory();
+    return { ok: true, message: "Fecha actualizada a hoy." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "No se pudo actualizar la fecha.",
     };
   }
 }

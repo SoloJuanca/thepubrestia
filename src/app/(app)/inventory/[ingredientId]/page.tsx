@@ -20,10 +20,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  INGREDIENT_KIND_LABELS,
   MOVEMENT_TYPE_LABELS,
   UNIT_LABELS,
 } from "@/features/inventory/labels";
+import {
+  daysOnHand,
+  isPrepared,
+  stockGroupLabel,
+} from "@/features/inventory/stock-rules";
 import { cn } from "@/lib/utils";
 import { IngredientDetailActions } from "@/features/inventory/components/IngredientDetailActions";
 
@@ -109,9 +113,15 @@ export default async function IngredientDetailPage({ params }: Props) {
           ) : null}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          {INGREDIENT_KIND_LABELS[ingredient.kind] ?? ingredient.kind}
+          {stockGroupLabel(ingredient.kind)}
+          {ingredient.perishable && !isPrepared(ingredient.kind)
+            ? " · Perecedero"
+            : ""}
+          {ingredient.stockedAt && current > 0
+            ? ` · En existencia desde hace ${daysOnHand(ingredient.stockedAt) ?? 0} días`
+            : ""}
           {" · "}
-          {ingredient.category ?? "Sin categoría"} · Unidad base: {unit}
+          {ingredient.category ?? "Sin categoría"} · Se cuenta en {unit}
           {ingredient.packSize ? ` · pack ${ingredient.packSize}` : ""}
           {ingredient.storageNote ? ` · ${ingredient.storageNote}` : ""}
         </p>

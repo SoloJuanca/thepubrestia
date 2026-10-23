@@ -35,7 +35,9 @@ import {
   KIND_OPTIONS,
   UNIT_LABELS,
   UNIT_OPTIONS,
+  unitChoices,
 } from "@/features/inventory/labels";
+import { looksPerishable } from "@/features/inventory/stock-rules";
 
 export type IngredientRow = {
   id: string;
@@ -51,6 +53,8 @@ export type IngredientRow = {
   averageCost: string;
   preferredSupplierId: string | null;
   preferredSupplierName: string | null;
+  perishable: boolean;
+  stockedAt: string | null;
   active: boolean;
 };
 
@@ -80,6 +84,7 @@ const emptyForm = {
   targetStock: "",
   averageCost: "0",
   preferredSupplierId: "",
+  perishable: false,
   active: true,
 };
 
@@ -108,6 +113,7 @@ export function IngredientsPanel({
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [perishableTouched, setPerishableTouched] = useState(false);
   const [addedCount, setAddedCount] = useState(0);
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
@@ -311,6 +317,7 @@ export function IngredientsPanel({
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm);
+    setPerishableTouched(false);
     setAddedCount(0);
     setOpen(true);
   }
@@ -329,8 +336,10 @@ export function IngredientsPanel({
       targetStock: row.targetStock ?? "",
       averageCost: row.averageCost,
       preferredSupplierId: row.preferredSupplierId ?? "",
+      perishable: row.perishable,
       active: row.active,
     });
+    setPerishableTouched(true);
     setOpen(true);
   }
 
@@ -338,6 +347,7 @@ export function IngredientsPanel({
     setOpen(false);
     setEditingId(null);
     setForm(emptyForm);
+    setPerishableTouched(false);
     setAddedCount(0);
   }
 
@@ -357,6 +367,7 @@ export function IngredientsPanel({
             form.targetStock === "" ? null : Number(form.targetStock),
           averageCost: Number(form.averageCost),
           preferredSupplierId: form.preferredSupplierId || null,
+          perishable: form.kind === "PREP" ? false : form.perishable,
           active: form.active,
         });
         if (!result.ok) {
@@ -382,6 +393,7 @@ export function IngredientsPanel({
           form.targetStock === "" ? null : Number(form.targetStock),
         averageCost: Number(form.averageCost),
         preferredSupplierId: form.preferredSupplierId || null,
+        perishable: form.kind === "PREP" ? false : form.perishable,
         active: form.active,
       });
       if (!result.ok) {
@@ -398,6 +410,7 @@ export function IngredientsPanel({
           kind: form.kind,
           baseUnit: form.baseUnit,
           preferredSupplierId: form.preferredSupplierId,
+          perishable: form.perishable,
         });
         return;
       }
@@ -707,7 +720,7 @@ export function IngredientsPanel({
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {editingId ? "Editar ingrediente" : "Nuevo ingrediente"}
+              {editingId ? "Editar" : "Nuevo insumo o preparado"}
             </DialogTitle>
             <DialogDescription>
               {editingId
@@ -730,7 +743,14 @@ export function IngredientsPanel({
               <Label>Nombre</Label>
               <Input
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const perishable =
+                    !editingId && !perishableTouched && form.kind !== "PREP"
+                      ? looksPerishable(name, form.category)
+                      : form.perishable;
+                  setForm({ ...form, name, perishable });
+                }}
                 required
                 autoFocus
               />
@@ -747,26 +767,27 @@ export function IngredientsPanel({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
-                <Label>Tipo</Label>
+                <Label>Qué es</Label>
                 <select
                   className="flex h-9 w-full cursor-pointer rounded-md border border-input bg-transparent px-3 text-sm"
-                  value={form.kind}
-                  onChange={(e) =>
+                  value={form.kind === "PREP" ? "PREP" : "INSUMO"}
+                  onChange={(e) => {
+                    if (e.target.value === "PREP") {
+                      setForm({ ...form, kind: "PREP", perishable: false });
+                      return;
+                    }
                     setForm({
                       ...form,
-                      kind: e.target.value as (typeof KIND_OPTIONS)[number],
-                    })
-                  }
+                      kind: form.kind === "PREP" ? "RAW" : form.kind,
+                    });
+                  }}
                 >
-                  {KIND_OPTIONS.map((k) => (
-                    <option key={k} value={k}>
-                      {INGREDIENT_KIND_LABELS[k]}
-                    </option>
-                  ))}
+                  <option value="INSUMO">Insumo</option>
+                  <option value="PREP">Preparado</option>
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Unidad base</Label>
+                <Label>Se cuenta en</Label>
                 <select
                   className="flex h-9 w-full cursor-pointer rounded-md border border-input bg-transparent px-3 text-sm"
                   value={form.baseUnit}
@@ -778,14 +799,38 @@ export function IngredientsPanel({
                     })
                   }
                 >
-                  {UNIT_OPTIONS.map((u) => (
+                  {unitChoices(form.baseUnit).map((u) => (
                     <option key={u} value={u}>
-                      {UNIT_LABELS[u]}
+                      {UNIT_LABELS[u] ?? u}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
+            {form.kind !== "PREP" ? (
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={form.perishable}
+                  onChange={(e) => {
+                    setPerishableTouched(true);
+                    setForm({ ...form, perishable: e.target.checked });
+                  }}
+                />
+                <span>
+                  Perecedero
+                  <span className="block text-xs text-muted-foreground">
+                    Verdura, fruta, carne y similares. Avisa si lleva más de 5
+                    días.
+                  </span>
+                </span>
+              </label>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Los preparados avisan solos si llevan más de 3 días.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <Label>Pzas / caja</Label>

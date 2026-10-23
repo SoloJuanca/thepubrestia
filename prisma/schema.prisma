@@ -485,6 +485,10 @@ model Ingredient {
   packSize            Int?
   storageNote         String?
   currentStock        Decimal        @default(0) @db.Decimal(14, 4)
+  /// When the oldest product still on hand arrived or was prepared.
+  stockedAt           DateTime?
+  /// Verdura, fruta, carne y otros insumos que no deben pasar de 5 días.
+  perishable          Boolean        @default(false)
   minimumStock        Decimal        @default(0) @db.Decimal(14, 4)
   targetStock         Decimal?       @db.Decimal(14, 4)
   averageCost         Decimal        @default(0) @db.Decimal(12, 4)
@@ -751,6 +755,12 @@ model RestaurantTable {
   @@unique([locationId, name])
   @@index([locationId, status])
   @@index([joinedToId])
+}
+
+/// Bumped when POS or kitchen changes so open WebSockets can push a refresh.
+model LiveSignal {
+  id      String @id
+  version Int    @default(0)
 }
 
 model Order {

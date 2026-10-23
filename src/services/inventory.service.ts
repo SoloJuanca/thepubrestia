@@ -6,6 +6,12 @@ import {
   WasteReason,
   type PrismaClient,
 } from "@prisma/client";
+import {
+  isOlderThan,
+  isPrepared,
+  PERISHABLE_MAX_DAYS,
+  PREP_MAX_DAYS,
+} from "@/features/inventory/stock-rules";
 import { prisma } from "@/lib/prisma";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
@@ -42,6 +48,15 @@ export type AlertIngredient = {
   status: "OUT" | "LOW";
 };
 
+export type AgeAlert = {
+  id: string;
+  name: string;
+  baseUnit: UnitType;
+  currentStock: number;
+  days: number;
+  limitDays: number;
+};
+
 function toNumber(value: Prisma.Decimal | number | string) {
   return Number(value);
 }
@@ -67,9 +82,10 @@ export class InventoryService {
           currentStock: Prisma.Decimal;
           averageCost: Prisma.Decimal;
           active: boolean;
+          stockedAt: Date | null;
         }>
       >`
-        SELECT id, "locationId", "currentStock", "averageCost", active
+        SELECT id, "locationId", "currentStock", "averageCost", active, "stockedAt"
         FROM "Ingredient"
         WHERE id = ${input.ingredientId}
         FOR UPDATE
@@ -110,11 +126,16 @@ export class InventoryService {
         );
       }
 
+      let stockedAt: Date | null | undefined;
+      if (resultingStock <= 0) stockedAt = null;
+      else if (previousStock <= 0) stockedAt = new Date();
+
       await tx.ingredient.update({
         where: { id: ingredient.id },
         data: {
           currentStock: resultingStock,
           averageCost: nextAverageCost,
+          ...(stockedAt !== undefined ? { stockedAt } : {}),
         },
       });
 
@@ -231,10 +252,26 @@ export class InventoryService {
     return Math.max(0, roundQty(goal - current));
   }
 
+  async markLotToday(ingredientId: string) {
+    const ingredient = await prisma.ingredient.findUnique({
+      where: { id: ingredientId },
+    });
+    if (!ingredient) throw new Error("Ingrediente no encontrado.");
+    if (toNumber(ingredient.currentStock) <= 0) {
+      throw new Error("No hay existencias. Primero anota cuánto hay.");
+    }
+    await prisma.ingredient.update({
+      where: { id: ingredientId },
+      data: { stockedAt: new Date() },
+    });
+  }
+
   async getStockAlerts(locationId: string): Promise<{
     low: AlertIngredient[];
     out: AlertIngredient[];
     suggested: AlertIngredient[];
+    stalePrepared: AgeAlert[];
+    stalePerishable: AgeAlert[];
   }> {
     const ingredients = await prisma.ingredient.findMany({
       where: { locationId, active: true },
@@ -273,7 +310,41 @@ export class InventoryService {
     );
     const suggested = mapped.filter((i) => i.suggestedPurchase > 0);
 
-    return { low, out, suggested };
+    const stalePrepared: AgeAlert[] = [];
+    const stalePerishable: AgeAlert[] = [];
+    for (const ing of ingredients) {
+      const currentStock = toNumber(ing.currentStock);
+      if (currentStock <= 0 || !ing.stockedAt) continue;
+      if (isPrepared(ing.kind) && isOlderThan(ing.stockedAt, PREP_MAX_DAYS)) {
+        stalePrepared.push({
+          id: ing.id,
+          name: ing.name,
+          baseUnit: ing.baseUnit,
+          currentStock,
+          days: Math.floor(
+            (Date.now() - ing.stockedAt.getTime()) / 86_400_000,
+          ),
+          limitDays: PREP_MAX_DAYS,
+        });
+      } else if (
+        !isPrepared(ing.kind) &&
+        ing.perishable &&
+        isOlderThan(ing.stockedAt, PERISHABLE_MAX_DAYS)
+      ) {
+        stalePerishable.push({
+          id: ing.id,
+          name: ing.name,
+          baseUnit: ing.baseUnit,
+          currentStock,
+          days: Math.floor(
+            (Date.now() - ing.stockedAt.getTime()) / 86_400_000,
+          ),
+          limitDays: PERISHABLE_MAX_DAYS,
+        });
+      }
+    }
+
+    return { low, out, suggested, stalePrepared, stalePerishable };
   }
 }
 

@@ -19,6 +19,7 @@ import {
   addOrderItemAction,
   addSeatAction,
   endTableSessionAction,
+  markItemDeliveredAction,
   removeOrderItemAction,
   sendToKitchenAction,
   updateItemNotesAction,
@@ -26,6 +27,7 @@ import {
 } from "@/features/pos/actions";
 import { PaymentSheet } from "@/features/payments/components/PaymentSheet";
 import { SplitBillDrawer } from "@/features/pos/components/SplitBillDrawer";
+import { useLiveRefresh } from "@/features/pos/hooks/useLiveRefresh";
 import { displayCheckName } from "@/lib/pos-labels";
 
 export type PosCategory = { id: string; name: string };
@@ -95,6 +97,14 @@ export type PosSession = {
 
 type Props = { session: PosSession };
 
+const ITEM_STATUS_LABEL: Record<string, string> = {
+  OPEN: "En cuenta",
+  SENT_TO_KITCHEN: "En cocina",
+  PREPARING: "Preparando",
+  READY: "Listo",
+  DELIVERED: "Entregado",
+};
+
 export function TableSessionView({ session }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -112,6 +122,7 @@ export function TableSessionView({ session }: Props) {
   const [splitOpen, setSplitOpen] = useState(false);
   const [payCheckId, setPayCheckId] = useState<string | null>(null);
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
+  useLiveRefresh();
 
   const activeCheck =
     session.checks.find((c) => c.id === activeCheckId) ?? session.checks[0];
@@ -181,6 +192,14 @@ export function TableSessionView({ session }: Props) {
 
   function quickAdd(item: PosMenuItem) {
     openModifiers(item);
+  }
+
+  function deliverItem(orderItemId: string) {
+    startTransition(async () => {
+      const result = await markItemDeliveredAction({ orderItemId });
+      if (!result.ok) toast.error(result.error);
+      else toast.success("Entregado");
+    });
   }
 
   return (
@@ -339,9 +358,22 @@ export function TableSessionView({ session }: Props) {
                         ? ` · ${item.modifiers.join(", ")}`
                         : ""}
                     </p>
+                    <p className="text-xs font-medium text-[var(--pub-blue)]">
+                      {ITEM_STATUS_LABEL[item.status] ?? item.status}
+                    </p>
                   </div>
                   <p className="font-semibold">${item.lineTotal}</p>
                 </div>
+                {item.status === "READY" ? (
+                  <Button
+                    size="sm"
+                    className="mt-2 min-h-10 w-full"
+                    disabled={pending}
+                    onClick={() => deliverItem(item.id)}
+                  >
+                    Entregado
+                  </Button>
+                ) : null}
                 {activeCheck.status === "OPEN" ? (
                   <ItemKitchenNote itemId={item.id} notes={item.notes} />
                 ) : item.notes ? (
@@ -577,9 +609,22 @@ export function TableSessionView({ session }: Props) {
                           ? ` · ${item.modifiers.join(", ")}`
                           : ""}
                       </p>
+                      <p className="text-xs font-medium text-[var(--pub-blue)]">
+                        {ITEM_STATUS_LABEL[item.status] ?? item.status}
+                      </p>
                     </div>
                     <p className="font-semibold">${item.lineTotal}</p>
                   </div>
+                  {item.status === "READY" ? (
+                    <Button
+                      size="sm"
+                      className="mt-2 min-h-10 w-full"
+                      disabled={pending}
+                      onClick={() => deliverItem(item.id)}
+                    >
+                      Entregado
+                    </Button>
+                  ) : null}
                   {activeCheck?.status === "OPEN" ? (
                     <ItemKitchenNote itemId={item.id} notes={item.notes} />
                   ) : item.notes ? (

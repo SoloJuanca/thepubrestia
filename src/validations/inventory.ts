@@ -40,6 +40,7 @@ export const createIngredientSchema = z.object({
   targetStock: z.coerce.number().min(0).optional().nullable(),
   averageCost: z.coerce.number().min(0).default(0),
   preferredSupplierId: z.string().optional().nullable().or(z.literal("")),
+  perishable: z.boolean().optional(),
   active: z.boolean().default(true),
 });
 
@@ -55,6 +56,7 @@ export const updateIngredientSchema = z.object({
   targetStock: z.coerce.number().min(0).optional().nullable(),
   averageCost: z.coerce.number().min(0).optional(),
   preferredSupplierId: z.string().optional().nullable().or(z.literal("")),
+  perishable: z.boolean().optional(),
   active: z.boolean().optional(),
 });
 
@@ -101,6 +103,10 @@ export const savePrepRecipeSchema = z.object({
     quantity: z.coerce.number().positive(),
     unit: unitEnum,
   })).min(1),
+});
+
+export const markLotTodaySchema = z.object({
+  ingredientId: z.string().min(1),
 });
 
 export const adjustStockSchema = z.object({

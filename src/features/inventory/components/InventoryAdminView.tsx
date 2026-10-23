@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { InventoryStatusPanel } from "@/features/inventory/components/InventoryStatusPanel";
+import { StockBoard } from "@/features/inventory/components/StockBoard";
 import {
   IngredientsPanel,
   type IngredientRow,
@@ -32,7 +33,7 @@ import {
   YieldReportPanel,
   type YieldReportRow,
 } from "@/features/inventory/components/YieldReportPanel";
-import type { AlertIngredient } from "@/services/inventory.service";
+import type { AgeAlert, AlertIngredient } from "@/services/inventory.service";
 
 export type InventoryTab =
   | "home"
@@ -57,6 +58,8 @@ type Props = {
     low: AlertIngredient[];
     out: AlertIngredient[];
     suggested: AlertIngredient[];
+    stalePrepared: AgeAlert[];
+    stalePerishable: AgeAlert[];
   };
   pendingPurchaseOrders: number;
   ingredients: IngredientRow[];
@@ -175,12 +178,6 @@ export function InventoryAdminView({
   const primaryTasks: TaskCard[] = (
     [
       {
-        id: "estado",
-        label: "Estado del stock",
-        description: "Alertas, bajos y valor",
-        primary: true,
-      },
-      {
         id: "ops",
         label: "Registrar entrada",
         description: "Recibir producto",
@@ -195,15 +192,9 @@ export function InventoryAdminView({
         primary: true,
       },
       {
-        id: "production",
-        label: "Producción",
-        description: "Batches PREP",
-        primary: true,
-      },
-      {
         id: "ingredients",
         label: "Catálogo",
-        description: "Ingredientes y mínimos",
+        description: "Alta de insumos y preparados",
         primary: true,
       },
       {
@@ -217,6 +208,16 @@ export function InventoryAdminView({
 
   const moreTasks: TaskCard[] = (
     [
+      {
+        id: "production",
+        label: "Elaborar un preparado",
+        description: "Convierte insumos en algo ya preparado",
+      },
+      {
+        id: "estado",
+        label: "Valor y mínimos",
+        description: "Resumen de costos",
+      },
       {
         id: "waste",
         label: "Historial mermas",
@@ -241,10 +242,19 @@ export function InventoryAdminView({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Inventario</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Elige una tarea. {alerts.low.length + alerts.out.length} alertas ·{" "}
-            {pendingPurchaseOrders} pedidos abiertos.
+            Insumos son lo que se compra. Preparados son lo que ya se elaboró.
+            El conteo es en piezas, kilos o litros.
           </p>
         </div>
+
+        <StockBoard
+          ingredients={ingredients}
+          canAdjust={canAdjust}
+          stalePrepared={alerts.stalePrepared}
+          stalePerishable={alerts.stalePerishable}
+          lowCount={alerts.low.length}
+          outCount={alerts.out.length}
+        />
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {primaryTasks.map((task) => (
@@ -301,7 +311,7 @@ export function InventoryAdminView({
               router.push("/inventory?tab=ingredients&new=1");
             }}
           >
-            Nuevo ingrediente
+            Nuevo insumo o preparado
           </Button>
         ) : null}
       </div>
@@ -359,7 +369,7 @@ export function InventoryAdminView({
                 router.push("/inventory?tab=ingredients&new=1");
               }}
             >
-              Nuevo ingrediente
+              Nuevo insumo o preparado
             </Button>
           ) : null}
         </div>

@@ -152,8 +152,8 @@ export function ProductionPanel({
   if (prepIngredients.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        No hay insumos tipo Producción (PREP). Clasifica o crea ingredientes
-        PREP (guacamole, carnes, salsas…).
+        No hay preparados. En el catálogo crea el producto y márcalo como
+        Preparado (guacamole, salsa, carne marinada).
       </p>
     );
   }
@@ -163,16 +163,15 @@ export function ProductionPanel({
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Registrar producción</CardTitle>
+            <CardTitle className="text-base">Elaborar preparado</CardTitle>
             <CardDescription>
-              Consume insumos de la receta PREP y suma stock al producto
-              terminado. Mide rendimiento real vs teórico.
+              Resta los insumos de la receta y suma el preparado terminado.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={onRunBatch} className="space-y-3">
               <div className="space-y-1">
-                <Label>Producto PREP</Label>
+                <Label>Preparado</Label>
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                   value={outputId}
@@ -357,7 +356,7 @@ export function ProductionPanel({
                   type="submit"
                   disabled={pending || !canEditRecipes}
                 >
-                  Guardar receta PREP
+                  Guardar receta
                 </Button>
               </div>
             </form>
