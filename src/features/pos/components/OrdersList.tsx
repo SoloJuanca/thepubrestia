@@ -18,6 +18,7 @@ export type OrderListRow = {
   tableName: string | null;
   tableId: string | null;
   guestName: string | null;
+  employeeMeal: boolean;
   status: string;
   waiterName: string | null;
   openedAt: Date;
@@ -55,8 +56,12 @@ export function OrdersList({ orders }: Props) {
             <TableRow key={order.id}>
               <TableCell>#{order.ticketNumber ?? "—"}</TableCell>
               <TableCell>
-                {order.tableName ??
-                  (order.guestName ? `Para llevar · ${order.guestName}` : "—")}
+                {order.employeeMeal
+                  ? `Empleado · ${order.guestName ?? "Empleado"}`
+                  : (order.tableName ??
+                    (order.guestName
+                      ? `Para llevar · ${order.guestName}`
+                      : "—"))}
               </TableCell>
               <TableCell>
                 <Badge variant="secondary">{order.status}</Badge>
@@ -75,7 +80,7 @@ export function OrdersList({ orders }: Props) {
                 </span>
               </TableCell>
               <TableCell className="text-right">
-                {order.tableId || order.guestName ? (
+                {!order.employeeMeal && (order.tableId || order.guestName) ? (
                   <Link
                     href={
                       order.tableId

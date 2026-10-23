@@ -29,11 +29,18 @@ export default async function TakeoutOrderPage({ params }: Props) {
   await requirePermission("pos", "read");
   const { orderId } = await params;
 
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: orderInclude,
-  });
+  const [order, staffMeal] = await Promise.all([
+    prisma.order.findUnique({
+      where: { id: orderId },
+      include: orderInclude,
+    }),
+    prisma.employeeMealOrder.findUnique({
+      where: { orderId },
+      select: { id: true },
+    }),
+  ]);
 
+  if (staffMeal) redirect("/comida-empleado");
   if (!order || ["CLOSED", "CANCELLED"].includes(order.status)) notFound();
   if (order.tableId) redirect(`/pos/tables/${order.tableId}`);
   if (!order.guestName) notFound();

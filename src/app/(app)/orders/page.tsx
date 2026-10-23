@@ -22,6 +22,7 @@ export default async function OrdersPage() {
     include: {
       table: true,
       waiter: true,
+      employeeMealOrder: { select: { id: true } },
       checks: {
         where: { status: { not: "CANCELLED" } },
       },
@@ -45,6 +46,7 @@ export default async function OrdersPage() {
           tableName: order.table?.name ?? null,
           tableId: order.tableId,
           guestName: order.guestName,
+          employeeMeal: Boolean(order.employeeMealOrder),
           status: order.status,
           waiterName: order.waiter?.name ?? order.waiter?.email ?? null,
           openedAt: order.openedAt,

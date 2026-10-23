@@ -235,17 +235,19 @@ export const PERSONA_LABELS: Record<RolePersona, string> = {
 
 /** Primary sidebar hrefs (pathname or path without query) per persona. */
 export const PRIMARY_NAV_HREFS: Record<RolePersona, string[]> = {
-  waiter: ["/dashboard", "/pos", "/takeout", "/orders", "/attendance"],
+  waiter: ["/dashboard", "/pos", "/takeout", "/comida-empleado", "/orders", "/attendance"],
   cashier: [
     "/dashboard",
     "/pos",
     "/takeout",
+    "/comida-empleado",
     "/daily-close",
     "/expenses",
     "/attendance",
   ],
   kitchen: [
     "/kitchen",
+    "/comida-empleado",
     "/orders",
     "/inventory",
     "/attendance",
@@ -254,6 +256,7 @@ export const PRIMARY_NAV_HREFS: Record<RolePersona, string[]> = {
   inventory: [
     "/dashboard",
     "/inventory",
+    "/comida-empleado",
     "/purchases",
     "/suppliers",
     "/attendance",
@@ -262,6 +265,7 @@ export const PRIMARY_NAV_HREFS: Record<RolePersona, string[]> = {
     "/dashboard",
     "/pos",
     "/takeout",
+    "/comida-empleado",
     "/kitchen",
     "/inventory",
     "/purchases",
@@ -271,6 +275,7 @@ export const PRIMARY_NAV_HREFS: Record<RolePersona, string[]> = {
     "/dashboard",
     "/pos",
     "/takeout",
+    "/comida-empleado",
     "/kitchen",
     "/inventory",
     "/purchases",

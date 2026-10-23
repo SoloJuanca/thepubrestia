@@ -214,6 +214,8 @@ model User {
   reviewsAsWaiter    Review[]            @relation("ReviewWaiter")
   productionBatches  ProductionBatch[]   @relation("ProductionEmployee")
   assignedPromos   CustomerPromotion[] @relation("PromoAssignedBy")
+  employeeMealsSet   EmployeeMeal[]      @relation("EmployeeMealAuthor")
+  employeeMealOrders EmployeeMealOrder[]
 
   @@index([type])
   @@index([active])
@@ -333,6 +335,7 @@ model Location {
   timeOffs           EmployeeTimeOff[]
   productionBatches  ProductionBatch[]
   attendanceQrTokens AttendanceQrToken[]
+  employeeMeals      EmployeeMeal[]
 }
 
 /// Rotating QR token shown at the venue for check-in / check-out.
@@ -757,6 +760,41 @@ model RestaurantTable {
   @@index([joinedToId])
 }
 
+/// One staff meal for a service date. It is not a menu item.
+model EmployeeMeal {
+  id          String   @id @default(cuid())
+  locationId  String
+  serviceDate DateTime @db.Date
+  name        String
+  notes       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  location  Location             @relation(fields: [locationId], references: [id])
+  createdBy User?                @relation("EmployeeMealAuthor", fields: [createdById], references: [id])
+  orders    EmployeeMealOrder[]
+
+  @@unique([locationId, serviceDate])
+  @@index([locationId, serviceDate])
+}
+
+/// One employee, one meal order per service date.
+model EmployeeMealOrder {
+  id        String   @id @default(cuid())
+  mealId    String
+  userId    String
+  orderId   String   @unique
+  createdAt DateTime @default(now())
+
+  meal  EmployeeMeal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  user  User         @relation(fields: [userId], references: [id])
+  order Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([mealId, userId])
+  @@index([userId])
+}
+
 /// Bumped when POS or kitchen changes so open WebSockets can push a refresh.
 model LiveSignal {
   id      String @id
@@ -788,6 +826,7 @@ model Order {
   seats        Seat[]
   reviewTokens ReviewToken[]
   reviews      Review[]
+  employeeMealOrder EmployeeMealOrder?
 
   @@index([locationId, status])
   @@index([tableId])

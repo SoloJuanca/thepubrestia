@@ -32,7 +32,8 @@ export type PermissionResource =
   | "payments"
   | "daily_close"
   | "attendance"
-  | "services";
+  | "services"
+  | "staff_meal";
 
 export type NavItem = {
   title: string;
@@ -56,6 +57,12 @@ export const NAV_ITEMS: NavItem[] = [
   { title: "Inicio", href: "/dashboard", resource: "dashboard", group: "OPERACIÓN" },
   { title: "Mesas", href: "/pos", resource: "pos", group: "OPERACIÓN" },
   { title: "Para llevar", href: "/takeout", resource: "pos", group: "OPERACIÓN" },
+  {
+    title: "Comida empleado",
+    href: "/comida-empleado",
+    resource: "staff_meal",
+    group: "OPERACIÓN",
+  },
   { title: "Órdenes", href: "/orders", resource: "orders", group: "OPERACIÓN" },
   { title: "Cocina", href: "/kitchen", resource: "kitchen", group: "OPERACIÓN" },
   {
@@ -171,6 +178,7 @@ const ALL_RESOURCES: PermissionResource[] = [
   "daily_close",
   "attendance",
   "services",
+  "staff_meal",
 ];
 
 const ALL_ACTIONS: PermissionAction[] = [
@@ -204,6 +212,7 @@ const kitchenFloorPerms: Array<{
   { resource: "recipes", action: "read" },
   { resource: "attendance", action: "read" },
   { resource: "attendance", action: "create" },
+  { resource: "staff_meal", action: "read" },
 ];
 
 const kitchenPrepInventoryRead: Array<{
@@ -251,6 +260,7 @@ export function permissionsForRole(
         { resource: "attendance", action: "read" },
         { resource: "attendance", action: "create" },
         { resource: "attendance", action: "update" },
+        { resource: "staff_meal", action: "read" },
       ];
     case "CASHIER":
       return [
@@ -270,6 +280,7 @@ export function permissionsForRole(
         { resource: "attendance", action: "create" },
         { resource: "attendance", action: "update" },
         { resource: "expenses", action: "read" },
+        { resource: "staff_meal", action: "read" },
       ];
     /** Auxiliar: cola, órdenes, recetas (solo ver), asistencia vía QR */
     case "KITCHEN_ASSISTANT":
@@ -293,6 +304,8 @@ export function permissionsForRole(
         { resource: "recipes", action: "create" },
         { resource: "recipes", action: "update" },
         { resource: "attendance", action: "update" },
+        { resource: "staff_meal", action: "read" },
+        { resource: "staff_meal", action: "update" },
       ];
     case "INVENTORY":
       return [
@@ -313,6 +326,7 @@ export function permissionsForRole(
         { resource: "attendance", action: "read" },
         { resource: "attendance", action: "create" },
         { resource: "attendance", action: "update" },
+        { resource: "staff_meal", action: "read" },
       ];
     default:
       return [];

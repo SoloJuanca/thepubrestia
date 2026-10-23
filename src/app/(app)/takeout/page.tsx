@@ -22,6 +22,7 @@ export default async function TakeoutPage() {
       locationId: location.id,
       tableId: null,
       guestName: { not: null },
+      employeeMealOrder: { is: null },
       status: { notIn: ["CLOSED", "CANCELLED"] },
     },
     orderBy: { openedAt: "desc" },
