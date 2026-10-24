@@ -15,6 +15,7 @@ export function titleForPathname(pathname: string): string {
   const exact: Record<string, string> = {
     "/dashboard": "Inicio",
     "/pos": "Mesas",
+    "/takeout": "Individuales",
     "/orders": "Órdenes",
     "/kitchen": "Cocina",
     "/daily-close": "Cierre del día",

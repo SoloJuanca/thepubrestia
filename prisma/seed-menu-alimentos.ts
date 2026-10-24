@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { applyMenuExtras } from "./menu-extras";
 
 const prisma = new PrismaClient();
 
@@ -588,7 +589,9 @@ export async function seedMenuAlimentos(locationId: string) {
     }
   }
 
-  return { categoriesUpserted, productsUpserted, groupsUpserted };
+  const extras = await applyMenuExtras(prisma, locationId);
+
+  return { categoriesUpserted, productsUpserted, groupsUpserted, ...extras };
 }
 
 async function main() {

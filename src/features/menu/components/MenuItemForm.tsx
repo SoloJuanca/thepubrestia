@@ -205,6 +205,9 @@ export function MenuItemForm({
               value={form.sku}
               onChange={(e) => setForm({ ...form, sku: e.target.value })}
             />
+            <p className="text-xs text-muted-foreground">
+              Con SKU, el nombre, el precio y la disponibilidad se publican en WooCommerce.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="item-price">Precio</Label>

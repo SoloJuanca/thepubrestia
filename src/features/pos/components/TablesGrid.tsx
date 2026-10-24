@@ -17,6 +17,7 @@ import {
   setTableStatusAction,
 } from "@/features/pos/actions";
 import { OpenTableDrawer } from "@/features/pos/components/OpenTableDrawer";
+import { PosSectionTabs } from "@/features/pos/components/PosSectionTabs";
 import { TABLE_STATUS_LABELS } from "@/lib/pos-labels";
 import {
   FLOOR_ROWS,
@@ -463,12 +464,7 @@ export function TablesGrid({ tables, waiters, currentUserId }: Props) {
               Piso 8×4 · 11→10+11 · 12→12+13 · también se juntan 11+12
             </p>
           </div>
-          <Link
-            href="/takeout"
-            className="inline-flex h-9 items-center rounded-md bg-[var(--pub-blue)] px-3 text-sm font-medium text-white hover:bg-[var(--pub-blue)]/90"
-          >
-            Para llevar
-          </Link>
+          <PosSectionTabs current="mesas" />
         </div>
       </div>
 

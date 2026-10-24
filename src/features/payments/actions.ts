@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { assertPermission, AuthorizationError } from "@/lib/rbac";
 import { paymentService } from "@/services/payment.service";
+import { markWebOrderPaid } from "@/services/wordpress.service";
 import { dailyCloseService } from "@/services/daily-close.service";
 import { closeCheckSchema, dailyCloseSchema } from "@/validations/payment";
 
@@ -52,7 +53,16 @@ export async function closeCheckAction(raw: unknown): Promise<ActionResult> {
       },
     });
 
+    if (result.allClosed) {
+      try {
+        await markWebOrderPaid(result.orderId);
+      } catch (error) {
+        console.error("[payments] woo complete", error);
+      }
+    }
+
     revalidatePay(result.tableId);
+    revalidatePath("/cuenta/pedidos");
     return {
       ok: true,
       message: result.allClosed

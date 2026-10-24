@@ -1,9 +1,29 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { CUSTOMER_LOGIN_PATH, STAFF_LOGIN_PATH } from "@/lib/auth-paths";
 import { homePathForRoles } from "@/lib/post-login";
 
-const publicPaths = ["/login", "/verify", "/forgot-password", "/review"];
+const publicPaths = [
+  CUSTOMER_LOGIN_PATH,
+  STAFF_LOGIN_PATH,
+  "/verify",
+  "/forgot-password",
+  "/review",
+  "/pedir",
+  "/cuenta",
+];
+
+function isCustomerArea(pathname: string) {
+  return (
+    pathname === "/pedir" ||
+    pathname.startsWith("/pedir/") ||
+    pathname === "/cuenta" ||
+    pathname.startsWith("/cuenta/") ||
+    pathname === "/review" ||
+    pathname.startsWith("/review/")
+  );
+}
 
 /**
  * Auth.js may issue `__Secure-authjs.session-token` (HTTPS) or
@@ -46,15 +66,35 @@ export async function middleware(request: NextRequest) {
 
   const token = await readSessionToken(request);
   const roles = (token?.roles as string[] | undefined) ?? [];
+  const isCustomer = token?.type === "CUSTOMER";
+
+  if (isCustomer) {
+    const signingIn =
+      pathname === CUSTOMER_LOGIN_PATH ||
+      pathname === "/cuenta/entrar" ||
+      pathname === "/cuenta/registro";
+    if (!isCustomerArea(pathname) || signingIn || pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/pedir";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
 
   if (!token && !isPublic && pathname !== "/") {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = STAFF_LOGIN_PATH;
     url.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (token && (pathname === "/login" || pathname === "/")) {
+  if (
+    token &&
+    (pathname === STAFF_LOGIN_PATH ||
+      pathname === CUSTOMER_LOGIN_PATH ||
+      pathname === "/")
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = homePathForRoles(roles);
     return NextResponse.redirect(url);

@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { assertPermission, AuthorizationError } from "@/lib/rbac";
+import { syncMenuItemToStore } from "@/services/wordpress.service";
 import {
   createCategorySchema,
   createMenuItemSchema,
@@ -25,6 +26,7 @@ function emptyToNull(value?: string | null) {
 function revalidateMenu() {
   revalidatePath("/menu");
   revalidatePath("/menu", "layout");
+  revalidatePath("/pedir");
 }
 
 async function syncModifierGroups(
@@ -229,8 +231,13 @@ export async function createMenuItemAction(
       },
     });
 
+    const storeWarning = await syncMenuItemToStore(item.id);
     revalidateMenu();
-    return { ok: true, message: "Producto creado.", id: item.id };
+    return {
+      ok: true,
+      message: storeWarning ? `Producto creado. ${storeWarning}` : "Producto creado.",
+      id: item.id,
+    };
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return { ok: false, error: error.message };
@@ -342,8 +349,14 @@ export async function updateMenuItemAction(
       },
     });
 
+    const storeWarning = await syncMenuItemToStore(data.id);
     revalidateMenu();
-    return { ok: true, message: "Producto actualizado." };
+    return {
+      ok: true,
+      message: storeWarning
+        ? `Producto actualizado. ${storeWarning}`
+        : "Producto actualizado.",
+    };
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return { ok: false, error: error.message };
@@ -390,8 +403,14 @@ export async function toggleMenuItemAction(
       },
     });
 
+    const storeWarning = await syncMenuItemToStore(updated.id);
     revalidateMenu();
-    return { ok: true, message: "Estado actualizado." };
+    return {
+      ok: true,
+      message: storeWarning
+        ? `Estado actualizado. ${storeWarning}`
+        : "Estado actualizado.",
+    };
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return { ok: false, error: error.message };

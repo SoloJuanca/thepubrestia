@@ -185,9 +185,12 @@ export class OrderService {
   /** Takeout order identified by the customer's name. No table. */
   async openTakeout(params: {
     locationId: string;
-    waiterId: string;
+    waiterId?: string | null;
     guestName: string;
     notes?: string | null;
+    customerId?: string | null;
+    source?: "POS" | "WEB";
+    diningMode?: "HERE" | "TAKEOUT";
   }) {
     const guestName = params.guestName.trim();
     if (!guestName) throw new Error("Escribe el nombre del pedido.");
@@ -205,8 +208,10 @@ export class OrderService {
           locationId: params.locationId,
           tableId: null,
           guestName,
-          waiterId: params.waiterId,
+          waiterId: params.waiterId ?? null,
           status: "OPEN",
+          source: params.source ?? "POS",
+          diningMode: params.diningMode ?? "TAKEOUT",
           ticketNumber,
           partySize: 1,
           notes: params.notes?.trim() || null,
@@ -214,6 +219,7 @@ export class OrderService {
             create: {
               name: guestName,
               status: "OPEN",
+              customerId: params.customerId ?? null,
             },
           },
           seats: {
@@ -225,6 +231,86 @@ export class OrderService {
         },
         include: { checks: true, seats: true },
       });
+    });
+  }
+
+  /**
+   * Customer order from /pedir. Items go straight to the kitchen.
+   * Nothing is charged; the check stays open until the cashier closes it.
+   */
+  async placeWebOrder(params: {
+    locationId: string;
+    guestName: string;
+    customerId: string;
+    notes?: string | null;
+    lines: Array<{
+      menuItemId: string;
+      quantity: number;
+      modifierOptionIds: string[];
+      notes?: string | null;
+    }>;
+  }) {
+    if (!params.lines.length) throw new Error("Agrega al menos un producto.");
+
+    const note = ["Pedido en línea. Pagar al recoger.", params.notes?.trim()]
+      .filter(Boolean)
+      .join("\n");
+
+    const order = await this.openTakeout({
+      locationId: params.locationId,
+      guestName: params.guestName,
+      notes: note,
+      customerId: params.customerId,
+      source: "WEB",
+      diningMode: "TAKEOUT",
+    });
+
+    try {
+      const check = order.checks[0];
+      const seat = order.seats[0];
+      if (!check || !seat) throw new Error("No se pudo abrir el pedido.");
+
+      for (const line of params.lines) {
+        await this.addItem({
+          checkId: check.id,
+          seatId: seat.id,
+          menuItemId: line.menuItemId,
+          quantity: line.quantity,
+          modifierOptionIds: line.modifierOptionIds,
+          notes: line.notes,
+        });
+      }
+
+      await prisma.orderItem.updateMany({
+        where: { checkId: check.id, status: "OPEN" },
+        data: { status: "SENT_TO_KITCHEN", sentToKitchenAt: new Date() },
+      });
+
+      return prisma.order.update({
+        where: { id: order.id },
+        data: { status: "SENT_TO_KITCHEN" },
+      });
+    } catch (error) {
+      await prisma.order
+        .delete({ where: { id: order.id } })
+        .catch((deleteError) => {
+          console.error("[order] no se pudo retirar el pedido web", deleteError);
+        });
+      throw error;
+    }
+  }
+
+  async setDiningMode(params: { orderId: string; diningMode: "HERE" | "TAKEOUT" }) {
+    const order = await prisma.order.findUnique({ where: { id: params.orderId } });
+    if (!order || order.tableId || !order.guestName) {
+      throw new Error("Este pedido no es individual.");
+    }
+    if (["CLOSED", "CANCELLED"].includes(order.status)) {
+      throw new Error("El pedido ya está cerrado.");
+    }
+    return prisma.order.update({
+      where: { id: order.id },
+      data: { diningMode: params.diningMode },
     });
   }
 
@@ -688,7 +774,28 @@ export class OrderService {
         }
       }
 
-      return true;
+      let orderCancelled = false;
+      if (params.status === "CANCELLED" && item.check.order.source === "WEB") {
+        const remaining = await tx.orderItem.count({
+          where: {
+            status: { not: "CANCELLED" },
+            check: { orderId: item.check.orderId },
+          },
+        });
+        if (remaining === 0) {
+          await tx.order.update({
+            where: { id: item.check.orderId },
+            data: { status: "CANCELLED", cancelledAt: new Date() },
+          });
+          await tx.check.updateMany({
+            where: { orderId: item.check.orderId, status: "OPEN" },
+            data: { status: "CANCELLED" },
+          });
+          orderCancelled = true;
+        }
+      }
+
+      return { orderId: item.check.orderId, orderCancelled };
     });
   }
 

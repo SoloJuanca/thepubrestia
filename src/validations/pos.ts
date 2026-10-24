@@ -2,8 +2,16 @@ import { z } from "zod";
 
 export const openTakeoutSchema = z.object({
   guestName: z.string().trim().min(1, "Escribe el nombre").max(80),
+  diningMode: z.enum(["HERE", "TAKEOUT"], {
+    error: "Marca si es para comer aquí o para llevar.",
+  }),
   notes: z.string().max(500).optional().nullable(),
   waiterId: z.string().optional().nullable(),
+});
+
+export const diningModeSchema = z.object({
+  orderId: z.string().min(1),
+  diningMode: z.enum(["HERE", "TAKEOUT"]),
 });
 
 export const openTableSchema = z.object({

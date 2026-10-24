@@ -6,6 +6,7 @@ import { assertPermission, AuthorizationError } from "@/lib/rbac";
 import { waitUntil } from "@vercel/functions";
 import { publishLive } from "@/lib/live";
 import { orderService } from "@/services/order.service";
+import { cancelWebOrder } from "@/services/wordpress.service";
 import {
   addCheckSchema,
   addItemSchema,
@@ -17,6 +18,7 @@ import {
   moveItemsSchema,
   joinTablesSchema,
   openTableSchema,
+  diningModeSchema,
   openTakeoutSchema,
   renameCheckSchema,
   renameSeatSchema,
@@ -100,9 +102,17 @@ export async function openTakeoutAction(raw: unknown): Promise<ActionResult> {
       waiterId: data.waiterId || user.id,
       guestName: data.guestName,
       notes: data.notes,
+      diningMode: data.diningMode,
     });
     revalidatePos(undefined, order.id);
-    return { ok: true, message: "Pedido para llevar abierto.", id: order.id };
+    return {
+      ok: true,
+      message:
+        data.diningMode === "HERE"
+          ? "Pedido para comer aquí abierto."
+          : "Pedido para llevar abierto.",
+      id: order.id,
+    };
   } catch (error) {
     if (error instanceof AuthorizationError) {
       return { ok: false, error: error.message };
@@ -111,6 +121,28 @@ export async function openTakeoutAction(raw: unknown): Promise<ActionResult> {
       ok: false,
       error:
         error instanceof Error ? error.message : "No se pudo abrir el pedido.",
+    };
+  }
+}
+
+export async function setDiningModeAction(raw: unknown): Promise<ActionResult> {
+  try {
+    await assertPermission("pos", "update");
+    const data = diningModeSchema.parse(raw);
+    await orderService.setDiningMode(data);
+    revalidatePos(undefined, data.orderId);
+    revalidatePath("/kitchen");
+    return { ok: true, message: "Tipo de pedido actualizado." };
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return { ok: false, error: error.message };
+    }
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar el pedido.",
     };
   }
 }
@@ -281,7 +313,14 @@ export async function updateKitchenStatusAction(
   try {
     await assertPermission("kitchen", "update");
     const data = kitchenStatusSchema.parse(raw);
-    await orderService.updateKitchenItemStatus(data);
+    const result = await orderService.updateKitchenItemStatus(data);
+    if (result.orderCancelled) {
+      try {
+        await cancelWebOrder(result.orderId);
+      } catch (error) {
+        console.error("[kitchen] woo cancel", error);
+      }
+    }
     revalidatePos();
     return { ok: true, message: "Estado actualizado." };
   } catch (error) {

@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { CUSTOMER_LOGIN_PATH, STAFF_LOGIN_PATH } from "@/lib/auth-paths";
 import {
   hasPermission,
   type PermissionAction,
@@ -55,10 +56,23 @@ export function flattenPermissions(
 export async function requireUser() {
   const user = await getCurrentUser();
   if (!user) {
-    redirect("/login");
+    redirect(STAFF_LOGIN_PATH);
   }
   if (user.type !== "EMPLOYEE") {
-    redirect("/login");
+    redirect("/pedir");
+  }
+  return user;
+}
+
+/** Customer session for the public ordering pages. */
+export async function requireCustomer(nextPath = "/pedir") {
+  const user = await getCurrentUser();
+  const callback = encodeURIComponent(nextPath);
+  if (!user) {
+    redirect(`${CUSTOMER_LOGIN_PATH}?callbackUrl=${callback}`);
+  }
+  if (user.type !== "CUSTOMER" || !user.customerProfile) {
+    redirect("/dashboard");
   }
   return user;
 }

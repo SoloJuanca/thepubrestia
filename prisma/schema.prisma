@@ -84,6 +84,17 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum OrderSource {
+  POS
+  WEB
+}
+
+/// Individual order (no table): eaten in the venue or taken away.
+enum DiningMode {
+  HERE
+  TAKEOUT
+}
+
 enum CheckStatus {
   OPEN
   CLOSED
@@ -382,6 +393,8 @@ model CustomerProfile {
   visits        Int       @default(0)
   lifetimeSpend Decimal   @default(0) @db.Decimal(12, 2)
   lastVisitAt   DateTime?
+  /// WordPress user ID. The password stays in WordPress.
+  wpUserId      Int?      @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -420,6 +433,8 @@ model MenuItem {
   name               String
   description        String?
   sku                String?
+  /// WooCommerce product ID when this item is published to the store.
+  wcProductId        Int?     @unique
   price              Decimal  @db.Decimal(12, 2)
   estimatedCost      Decimal? @db.Decimal(12, 2)
   taxRate            Decimal  @default(0) @db.Decimal(5, 4)
@@ -808,6 +823,8 @@ model Order {
   waiterId            String?
   /// Set when the order is takeout (no table). Shown as the customer name.
   guestName           String?
+  /// Comer aquí o para llevar. Solo pedidos sin mesa.
+  diningMode          DiningMode?
   status              OrderStatus @default(OPEN)
   ticketNumber        Int?
   partySize           Int?
@@ -815,6 +832,10 @@ model Order {
   closedAt            DateTime?
   cancelledAt         DateTime?
   notes               String?
+  source              OrderSource @default(POS)
+  /// WooCommerce order ID mirrored for YITH / the online store.
+  wcOrderId           Int?        @unique
+  wcSyncError         String?     @db.Text
   inventoryConsumedAt DateTime?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt

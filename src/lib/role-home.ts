@@ -52,8 +52,8 @@ const HUB_PATHS: Record<RolePersona, HubPath[]> = {
       resource: "pos",
     },
     {
-      title: "Para llevar",
-      description: "Pedido por nombre, sin mesa",
+      title: "Individuales",
+      description: "Pedido por nombre, para comer aquí o para llevar",
       href: "/takeout",
       resource: "pos",
     },
@@ -78,8 +78,8 @@ const HUB_PATHS: Record<RolePersona, HubPath[]> = {
       resource: "pos",
     },
     {
-      title: "Para llevar",
-      description: "Pedidos por nombre listos para cobrar",
+      title: "Individuales",
+      description: "Pedidos por nombre, para comer aquí o para llevar",
       href: "/takeout",
       resource: "pos",
     },

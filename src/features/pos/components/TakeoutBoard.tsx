@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { openTakeoutAction } from "@/features/pos/actions";
+import { PosSectionTabs } from "@/features/pos/components/PosSectionTabs";
 import { TABLE_STATUS_LABELS } from "@/lib/pos-labels";
 
 export type TakeoutCard = {
@@ -20,6 +21,9 @@ export type TakeoutCard = {
   waiterName: string | null;
   unpaidCount: number;
   status: string;
+  source: "POS" | "WEB";
+  diningMode: "HERE" | "TAKEOUT" | null;
+  wooPending: boolean;
 };
 
 type Props = {
@@ -29,6 +33,7 @@ type Props = {
 export function TakeoutBoard({ orders }: Props) {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [diningMode, setDiningMode] = useState<"HERE" | "TAKEOUT" | null>(null);
   const [pending, startTransition] = useTransition();
 
   function createOrder(event: React.FormEvent) {
@@ -38,8 +43,12 @@ export function TakeoutBoard({ orders }: Props) {
       toast.error("Escribe el nombre");
       return;
     }
+    if (!diningMode) {
+      toast.error("Marca si es para comer aquí o para llevar");
+      return;
+    }
     startTransition(async () => {
-      const result = await openTakeoutAction({ guestName });
+      const result = await openTakeoutAction({ guestName, diningMode });
       if (!result.ok || !result.id) {
         toast.error(result.ok ? "No se pudo abrir el pedido." : result.error);
         return;
@@ -55,18 +64,13 @@ export function TakeoutBoard({ orders }: Props) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-            Para llevar
+            Individuales
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Abre un pedido con el nombre de quien lo recoge
+            Pedido por nombre, para comer aquí o para llevar
           </p>
         </div>
-        <Link
-          href="/pos"
-          className="text-sm font-medium text-[var(--pub-blue)] hover:underline"
-        >
-          Ver mesas
-        </Link>
+        <PosSectionTabs current="individuales" />
       </div>
 
       <form
@@ -85,6 +89,31 @@ export function TakeoutBoard({ orders }: Props) {
             className="h-11"
           />
         </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Consumo</legend>
+          <div className="flex gap-2">
+            {(
+              [
+                ["HERE", "Comer aquí"],
+                ["TAKEOUT", "Para llevar"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={diningMode === value}
+                onClick={() => setDiningMode(value)}
+                className={`h-11 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                  diningMode === value
+                    ? "border-[var(--pub-blue)] bg-[var(--pub-blue)] text-white"
+                    : "border-border bg-background hover:bg-muted"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
         <Button type="submit" className="h-11" disabled={pending}>
           {pending ? "Abriendo…" : "Nuevo pedido"}
         </Button>
@@ -92,7 +121,7 @@ export function TakeoutBoard({ orders }: Props) {
 
       {orders.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          No hay pedidos para llevar abiertos.
+          No hay pedidos individuales abiertos.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -108,21 +137,31 @@ export function TakeoutBoard({ orders }: Props) {
                     {order.guestName}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Para llevar
+                    {order.source === "WEB"
+                      ? "Web"
+                      : order.diningMode === "HERE"
+                        ? "Comer aquí"
+                        : "Para llevar"}
                     {order.ticketNumber != null ? ` · #${order.ticketNumber}` : ""}
                   </p>
                 </div>
-                <Badge variant="secondary" className="text-[10px]">
-                  {order.unpaidCount > 0
-                    ? TABLE_STATUS_LABELS.AWAITING_PAYMENT
-                    : "Abierta"}
-                </Badge>
+                <div className="flex flex-col items-end gap-1">
+                  {order.source === "WEB" ? (
+                    <Badge className="text-[10px]">Web</Badge>
+                  ) : null}
+                  <Badge variant="secondary" className="text-[10px]">
+                    {order.unpaidCount > 0
+                      ? TABLE_STATUS_LABELS.AWAITING_PAYMENT
+                      : "Abierta"}
+                  </Badge>
+                </div>
               </div>
               <div className="mt-2 text-xs">
                 <p className="font-medium">${order.total}</p>
                 <p className="text-muted-foreground">
                   {order.openMinutes} min
                   {order.waiterName ? ` · ${order.waiterName}` : ""}
+                  {order.wooPending ? " · pendiente en la tienda" : ""}
                 </p>
               </div>
             </Link>

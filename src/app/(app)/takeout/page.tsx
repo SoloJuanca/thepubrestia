@@ -1,7 +1,9 @@
 import { differenceInMinutes } from "date-fns";
+import { waitUntil } from "@vercel/functions";
 import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { TakeoutBoard } from "@/features/pos/components/TakeoutBoard";
+import { retryWebOrderSync } from "@/services/wordpress.service";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,14 @@ export default async function TakeoutPage() {
 
   if (!location) {
     return <p className="text-sm text-muted-foreground">Sin sucursal activa.</p>;
+  }
+
+  const sync = retryWebOrderSync(location.id);
+  void sync;
+  try {
+    waitUntil(sync);
+  } catch {
+    // next dev no tiene el contexto de Vercel.
   }
 
   const orders = await prisma.order.findMany({
@@ -46,6 +56,9 @@ export default async function TakeoutPage() {
         unpaidCount: order.checks.filter((check) => check.status === "OPEN")
           .length,
         status: order.status,
+        source: order.source,
+        diningMode: order.diningMode,
+        wooPending: order.source === "WEB" && !order.wcOrderId,
       }))}
     />
   );

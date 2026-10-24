@@ -49,11 +49,13 @@ export default async function KitchenPage() {
         orderItemId: item.id,
         tableName: item.check.order.employeeMealOrder
           ? `Empleado · ${item.check.order.employeeMealOrder.user.name ?? item.check.order.guestName ?? "Empleado"}`
-          : item.check.order.table?.name
-            ? item.check.order.table.name
-            : item.check.order.guestName
-              ? `Llevar · ${item.check.order.guestName}`
-              : "Sin mesa",
+          : item.check.order.source === "WEB"
+            ? `Web · ${item.check.order.guestName ?? "Cliente"}`
+            : item.check.order.table?.name
+              ? item.check.order.table.name
+              : item.check.order.guestName
+                ? `${item.check.order.diningMode === "HERE" ? "Aquí" : "Llevar"} · ${item.check.order.guestName}`
+                : "Sin mesa",
         checkName: item.check.name,
         itemName: item.nameSnapshot,
         quantity: item.quantity,

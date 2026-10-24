@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { updateKitchenStatusAction } from "@/features/pos/actions";
 import {
+  enableKitchenSound,
+  isKitchenSoundRunning,
+  noteKitchenTickets,
   playKitchenChime,
-  unlockKitchenSound,
 } from "@/features/pos/kitchen-chime";
 import { useLiveRefresh } from "@/features/pos/hooks/useLiveRefresh";
 
@@ -42,63 +44,42 @@ export function KitchenBoard({ tickets }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [soundReady, setSoundReady] = useState(false);
-  const seenIds = useRef<Set<string> | null>(null);
   const soundReadyRef = useRef(false);
   const pendingChime = useRef(false);
   useLiveRefresh();
+
+  useEffect(() => {
+    if (isKitchenSoundRunning()) {
+      setSoundReady(true);
+      soundReadyRef.current = true;
+    }
+  }, []);
 
   useEffect(() => {
     soundReadyRef.current = soundReady;
   }, [soundReady]);
 
   useEffect(() => {
-    function arm(event: PointerEvent) {
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest("[data-kitchen-sound]")
-      ) {
-        return;
-      }
-      void unlockKitchenSound().then((ok) => {
-        if (!ok) return;
-        setSoundReady(true);
-        soundReadyRef.current = true;
-        if (pendingChime.current) {
-          pendingChime.current = false;
-          playKitchenChime();
-        }
-      });
-    }
-    window.addEventListener("pointerdown", arm);
-    return () => window.removeEventListener("pointerdown", arm);
-  }, []);
-
-  useEffect(() => {
-    const ids = tickets.map((ticket) => ticket.orderItemId);
-    if (seenIds.current === null) {
-      seenIds.current = new Set(ids);
+    const arrived = noteKitchenTickets(tickets.map((ticket) => ticket.orderItemId));
+    if (!arrived) return;
+    if (soundReadyRef.current) {
+      playKitchenChime();
       return;
     }
-    const arrived = ids.some((id) => !seenIds.current?.has(id));
-    for (const id of ids) seenIds.current.add(id);
-    if (!arrived) return;
-    if (soundReadyRef.current && playKitchenChime()) return;
     pendingChime.current = true;
   }, [tickets]);
 
   function enableSound() {
-    void unlockKitchenSound().then((ok) => {
+    void enableKitchenSound().then((ok) => {
       if (!ok) {
         toast.error(
-          "El navegador bloqueó el sonido. Toca la pantalla e inténtalo de nuevo.",
+          "El navegador bloqueó el sonido. Toca el aviso e inténtalo de nuevo.",
         );
         return;
       }
       setSoundReady(true);
       soundReadyRef.current = true;
       pendingChime.current = false;
-      playKitchenChime();
     });
   }
 
@@ -123,6 +104,23 @@ export function KitchenBoard({ tickets }: Props) {
 
   return (
     <div className="space-y-6">
+      {!soundReady ? (
+        <button
+          type="button"
+          onClick={enableSound}
+          className="flex w-full items-center justify-between gap-4 rounded-xl bg-[var(--pub-blue)] px-4 py-4 text-left text-white shadow-sm transition-colors hover:bg-[var(--pub-blue-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        >
+          <span>
+            <span className="block text-base font-semibold">
+              Activa el sonido de cocina
+            </span>
+            <span className="mt-1 block text-sm text-white/90">
+              Toca este aviso. Vas a escuchar una campana de prueba y otra cada vez que entre un pedido.
+            </span>
+          </span>
+          <Volume2 className="size-8 shrink-0" aria-hidden />
+        </button>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -133,15 +131,12 @@ export function KitchenBoard({ tickets }: Props) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant={soundReady ? "secondary" : "default"}
-            className="min-h-11"
-            data-kitchen-sound=""
-            onClick={enableSound}
-          >
-            <Volume2 />
-            {soundReady ? "Sonido activo" : "Activar sonido"}
-          </Button>
+          {soundReady ? (
+            <Button variant="secondary" className="min-h-11" type="button" disabled>
+              <Volume2 />
+              Sonido activo
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             className="min-h-11"

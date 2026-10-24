@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { signOut } from "@/lib/auth";
+import { STAFF_LOGIN_PATH } from "@/lib/auth-paths";
 import { prisma } from "@/lib/prisma";
 import {
   assertPermission,
@@ -19,7 +20,7 @@ export type ActionResult =
   | { ok: false; error: string };
 
 export async function signOutAction() {
-  await signOut({ redirectTo: "/login" });
+  await signOut({ redirectTo: STAFF_LOGIN_PATH });
 }
 
 /** Logged-in employee changes their own password. */

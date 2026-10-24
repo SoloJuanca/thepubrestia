@@ -56,7 +56,7 @@ export const NAV_GROUPS = [
 export const NAV_ITEMS: NavItem[] = [
   { title: "Inicio", href: "/dashboard", resource: "dashboard", group: "OPERACIÓN" },
   { title: "Mesas", href: "/pos", resource: "pos", group: "OPERACIÓN" },
-  { title: "Para llevar", href: "/takeout", resource: "pos", group: "OPERACIÓN" },
+  { title: "Individuales", href: "/takeout", resource: "pos", group: "OPERACIÓN" },
   {
     title: "Comida empleado",
     href: "/comida-empleado",

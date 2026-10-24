@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { LoginForm } from "@/features/auth/components/LoginForm";
+import { CUSTOMER_LOGIN_PATH } from "@/lib/auth-paths";
 import { prisma } from "@/lib/prisma";
 
 type Props = {
@@ -9,14 +11,13 @@ function safeCallbackUrl(value: string | undefined): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
     return "/post-login";
   }
-  // Always resolve role home via post-login when landing from bare login
   if (value === "/dashboard" || value === "/kitchen") {
     return "/post-login";
   }
   return value;
 }
 
-export default async function LoginPage({ searchParams }: Props) {
+export default async function StaffLoginPage({ searchParams }: Props) {
   const params = await searchParams;
   const callbackUrl = safeCallbackUrl(params.callbackUrl);
 
@@ -47,8 +48,13 @@ export default async function LoginPage({ searchParams }: Props) {
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(oklch(1_0_0_/0.04)_1px,transparent_1px),linear-gradient(90deg,oklch(1_0_0_/0.04)_1px,transparent_1px)] [background-size:48px_48px]"
       />
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-md space-y-4">
         <LoginForm callbackUrl={callbackUrl} staff={staff} />
+        <p className="text-center text-sm text-white/80">
+          <Link href={CUSTOMER_LOGIN_PATH} className="underline underline-offset-2">
+            ¿Eres cliente? Entra aquí
+          </Link>
+        </p>
       </div>
     </main>
   );

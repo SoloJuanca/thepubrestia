@@ -19,6 +19,8 @@ export type OrderListRow = {
   tableId: string | null;
   guestName: string | null;
   employeeMeal: boolean;
+  source?: "POS" | "WEB";
+  diningMode?: "HERE" | "TAKEOUT" | null;
   status: string;
   waiterName: string | null;
   openedAt: Date;
@@ -58,10 +60,12 @@ export function OrdersList({ orders }: Props) {
               <TableCell>
                 {order.employeeMeal
                   ? `Empleado · ${order.guestName ?? "Empleado"}`
-                  : (order.tableName ??
-                    (order.guestName
-                      ? `Para llevar · ${order.guestName}`
-                      : "—"))}
+                  : order.source === "WEB"
+                    ? `Web · ${order.guestName ?? "Cliente"}`
+                    : (order.tableName ??
+                      (order.guestName
+                        ? `${order.diningMode === "HERE" ? "Aquí" : "Para llevar"} · ${order.guestName}`
+                        : "—"))}
               </TableCell>
               <TableCell>
                 <Badge variant="secondary">{order.status}</Badge>

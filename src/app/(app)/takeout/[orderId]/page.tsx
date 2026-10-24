@@ -76,7 +76,8 @@ export default async function TakeoutOrderPage({ params }: Props) {
       session={{
         mode: "takeout",
         backHref: "/takeout",
-        backLabel: "← Para llevar",
+        backLabel: "← Individuales",
+        diningMode: order.diningMode,
         tableId: "",
         tableName: order.guestName,
         orderId: order.id,

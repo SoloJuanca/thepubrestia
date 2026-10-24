@@ -19,6 +19,7 @@ import {
   addOrderItemAction,
   addSeatAction,
   endTableSessionAction,
+  setDiningModeAction,
   markItemDeliveredAction,
   removeOrderItemAction,
   sendToKitchenAction,
@@ -87,6 +88,7 @@ export type PosSession = {
   openMinutes: number;
   waiterName: string | null;
   mode?: "table" | "takeout";
+  diningMode?: "HERE" | "TAKEOUT" | null;
   backHref?: string;
   backLabel?: string;
   checks: PosCheck[];
@@ -243,10 +245,48 @@ export function TableSessionView({ session }: Props) {
             </h1>
             <p className="text-sm text-muted-foreground">
               {takeout
-                ? `Para llevar · ${session.openMinutes} min`
+                ? `${session.openMinutes} min`
                 : `${session.partySize ?? "—"} personas · ${session.openMinutes} min`}
               {session.waiterName ? ` · Mesero: ${session.waiterName}` : ""}
             </p>
+            {takeout ? (
+              <div
+                className="mt-2 flex flex-wrap gap-2"
+                role="group"
+                aria-label="Dónde se consume"
+              >
+                {(
+                  [
+                    ["HERE", "Comer aquí"],
+                    ["TAKEOUT", "Para llevar"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={session.diningMode === value}
+                    disabled={pending}
+                    onClick={() =>
+                      startTransition(async () => {
+                        const result = await setDiningModeAction({
+                          orderId: session.orderId,
+                          diningMode: value,
+                        });
+                        if (!result.ok) toast.error(result.error);
+                        else router.refresh();
+                      })
+                    }
+                    className={`h-9 rounded-lg border px-3 text-sm font-medium transition-colors disabled:opacity-50 ${
+                      session.diningMode === value
+                        ? "border-[var(--pub-blue)] bg-[var(--pub-blue)] text-white"
+                        : "border-border bg-background hover:bg-muted"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button

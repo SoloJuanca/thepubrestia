@@ -4,7 +4,9 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Resend from "next-auth/providers/resend";
 import { z } from "zod";
+import { STAFF_LOGIN_PATH } from "@/lib/auth-paths";
 import { prisma } from "@/lib/prisma";
+import { loginCustomerAccount } from "@/services/customer-account.service";
 
 const STAFF_DOMAIN = "thepubalenasur.com.mx";
 
@@ -24,14 +26,19 @@ const credentialsSchema = z.object({
   password: z.string().min(6),
 });
 
+const customerCredentialsSchema = z.object({
+  email: z.string().trim().email().max(160),
+  password: z.string().min(1).max(200),
+});
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   secret: process.env.AUTH_SECRET,
   session: { strategy: "jwt" },
   pages: {
-    signIn: "/login",
+    signIn: STAFF_LOGIN_PATH,
     verifyRequest: "/verify",
-    error: "/login",
+    error: STAFF_LOGIN_PATH,
   },
   providers: [
     Credentials({
@@ -73,6 +80,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           };
         } catch (error) {
           console.error("[auth] credentials authorize failed", error);
+          return null;
+        }
+      },
+    }),
+    Credentials({
+      id: "customer",
+      name: "customer",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(raw) {
+        const parsed = customerCredentialsSchema.safeParse(raw);
+        if (!parsed.success) return null;
+
+        try {
+          const user = await loginCustomerAccount(
+            parsed.data.email,
+            parsed.data.password,
+          );
+          if (!user.active || user.type !== "CUSTOMER") return null;
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            type: user.type,
+            roles: [] as string[],
+            locationId: null,
+          };
+        } catch (error) {
+          console.error("[auth] customer authorize failed", error);
           return null;
         }
       },
