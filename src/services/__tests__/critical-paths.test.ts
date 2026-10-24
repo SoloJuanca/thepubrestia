@@ -13,6 +13,7 @@ import {
 } from "@/services/purchase-order.service";
 import {
   assertAllChecksPaid,
+  hasAmountDue,
   assertFullyAssigned,
   assertPaymentsCoverTotal,
   splitEqualAmounts,
@@ -29,7 +30,17 @@ describe("pricing", () => {
     expect(roundMoney(10.004)).toBe(10);
   });
 
-  it("calculates line price with tax and discount", () => {
+  it("charges the menu price without adding IVA on top", () => {
+    const line = calculateLinePrice({
+      basePrice: 30,
+      modifiersTotal: 0,
+      taxRate: 0.16,
+    });
+    expect(line.taxAmount).toBe(0);
+    expect(line.finalPrice).toBe(30);
+  });
+
+  it("applies modifiers and discount without tax", () => {
     const line = calculateLinePrice({
       basePrice: 100,
       modifiersTotal: 20,
@@ -37,8 +48,8 @@ describe("pricing", () => {
       taxRate: 0.16,
     });
     expect(line.taxableAmount).toBe(110);
-    expect(line.taxAmount).toBe(17.6);
-    expect(line.finalPrice).toBe(127.6);
+    expect(line.taxAmount).toBe(0);
+    expect(line.finalPrice).toBe(110);
   });
 
   it("preserves totals when summing lines", () => {
@@ -92,6 +103,18 @@ describe("bill split", () => {
     expect(() =>
       assertAllChecksPaid([{ status: "CLOSED" }, { status: "CANCELLED" }]),
     ).not.toThrow();
+  });
+
+  it("treats a zero open check as nothing to collect", () => {
+    expect(hasAmountDue([{ status: "OPEN", total: 0 }])).toBe(false);
+    expect(hasAmountDue([{ status: "OPEN", total: "0.00" }])).toBe(false);
+    expect(
+      hasAmountDue([
+        { status: "CLOSED", total: 120 },
+        { status: "OPEN", total: 0 },
+      ]),
+    ).toBe(false);
+    expect(hasAmountDue([{ status: "OPEN", total: 1 }])).toBe(true);
   });
 });
 

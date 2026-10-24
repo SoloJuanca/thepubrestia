@@ -490,9 +490,12 @@ export async function endTableSessionAction(
   raw: unknown,
 ): Promise<ActionResult> {
   try {
-    await assertPermission("pos", "update");
+    const { user } = await assertPermission("pos", "update");
     const data = endSessionSchema.parse(raw);
-    await orderService.endTableSession(data);
+    await orderService.endTableSession({
+      ...data,
+      employeeId: user.id,
+    });
     revalidatePos();
     return { ok: true, message: "Sesión de mesa finalizada." };
   } catch (error) {

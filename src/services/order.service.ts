@@ -5,7 +5,8 @@ import {
   type TableStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { assertAllChecksPaid } from "@/lib/pos-labels";
+import { assertAllChecksPaid, hasAmountDue } from "@/lib/pos-labels";
+import { consumeCheckSales } from "@/services/payment.service";
 import {
   areAdjacent,
   joinPrimaryCode,
@@ -930,7 +931,11 @@ export class OrderService {
     });
   }
 
-  async endTableSession(params: { orderId: string; forceCleaning?: boolean }) {
+  async endTableSession(params: {
+    orderId: string;
+    forceCleaning?: boolean;
+    employeeId?: string | null;
+  }) {
     return prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: params.orderId },
@@ -943,8 +948,26 @@ export class OrderService {
         throw new Error("La orden ya está cerrada.");
       }
 
-      if (!params.forceCleaning) {
+      const owesMoney = hasAmountDue(
+        order.checks.map((check) => ({
+          status: check.status,
+          total: toNum(check.total),
+        })),
+      );
+      if (!params.forceCleaning && owesMoney) {
         assertAllChecksPaid(order.checks);
+      }
+
+      if (!owesMoney) {
+        const zeroChecks = order.checks.filter(
+          (check) => check.status === "OPEN",
+        );
+        for (const check of zeroChecks) {
+          await consumeCheckSales(tx, {
+            checkId: check.id,
+            employeeId: params.employeeId ?? order.waiterId,
+          });
+        }
       }
 
       await tx.order.update({
@@ -952,6 +975,7 @@ export class OrderService {
         data: {
           status: "CLOSED",
           closedAt: new Date(),
+          inventoryConsumedAt: order.inventoryConsumedAt ?? new Date(),
         },
       });
       await tx.check.updateMany({

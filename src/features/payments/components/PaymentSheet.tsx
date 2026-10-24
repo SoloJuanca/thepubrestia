@@ -108,10 +108,12 @@ export function PaymentSheet({
               <span>Descuentos</span>
               <span>-${discountTotal}</span>
             </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Impuestos</span>
-              <span>${taxTotal}</span>
-            </div>
+            {Number(taxTotal) > 0 ? (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Impuestos</span>
+                <span>${taxTotal}</span>
+              </div>
+            ) : null}
             <div className="mt-2 flex justify-between text-lg font-semibold">
               <span>Total</span>
               <span>${total}</span>

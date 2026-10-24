@@ -1,11 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { updateKitchenStatusAction } from "@/features/pos/actions";
+import {
+  playKitchenChime,
+  unlockKitchenSound,
+} from "@/features/pos/kitchen-chime";
 import { useLiveRefresh } from "@/features/pos/hooks/useLiveRefresh";
 
 export type KitchenTicket = {
@@ -36,7 +41,66 @@ const NEXT_LABEL: Record<string, string> = {
 export function KitchenBoard({ tickets }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [soundReady, setSoundReady] = useState(false);
+  const seenIds = useRef<Set<string> | null>(null);
+  const soundReadyRef = useRef(false);
+  const pendingChime = useRef(false);
   useLiveRefresh();
+
+  useEffect(() => {
+    soundReadyRef.current = soundReady;
+  }, [soundReady]);
+
+  useEffect(() => {
+    function arm(event: PointerEvent) {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("[data-kitchen-sound]")
+      ) {
+        return;
+      }
+      void unlockKitchenSound().then((ok) => {
+        if (!ok) return;
+        setSoundReady(true);
+        soundReadyRef.current = true;
+        if (pendingChime.current) {
+          pendingChime.current = false;
+          playKitchenChime();
+        }
+      });
+    }
+    window.addEventListener("pointerdown", arm);
+    return () => window.removeEventListener("pointerdown", arm);
+  }, []);
+
+  useEffect(() => {
+    const ids = tickets.map((ticket) => ticket.orderItemId);
+    if (seenIds.current === null) {
+      seenIds.current = new Set(ids);
+      return;
+    }
+    const arrived = ids.some((id) => !seenIds.current?.has(id));
+    for (const id of ids) seenIds.current.add(id);
+    if (!arrived) return;
+    if (soundReadyRef.current && playKitchenChime()) return;
+    pendingChime.current = true;
+  }, [tickets]);
+
+  function enableSound() {
+    void unlockKitchenSound().then((ok) => {
+      if (!ok) {
+        toast.error(
+          "El navegador bloqueó el sonido. Toca la pantalla e inténtalo de nuevo.",
+        );
+        return;
+      }
+      setSoundReady(true);
+      soundReadyRef.current = true;
+      pendingChime.current = false;
+      playKitchenChime();
+    });
+  }
 
   const groups = {
     SENT_TO_KITCHEN: tickets.filter((t) => t.status === "SENT_TO_KITCHEN"),
@@ -68,13 +132,24 @@ export function KitchenBoard({ tickets }: Props) {
             En vivo. El mesero marca entregado cuando lo lleva.
           </p>
         </div>
-        <Button
-          variant="outline"
-          className="min-h-11"
-          onClick={() => router.refresh()}
-        >
-          Actualizar
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={soundReady ? "secondary" : "default"}
+            className="min-h-11"
+            data-kitchen-sound=""
+            onClick={enableSound}
+          >
+            <Volume2 />
+            {soundReady ? "Sonido activo" : "Activar sonido"}
+          </Button>
+          <Button
+            variant="outline"
+            className="min-h-11"
+            onClick={() => router.refresh()}
+          >
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

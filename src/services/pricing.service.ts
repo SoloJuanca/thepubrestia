@@ -37,14 +37,13 @@ export function calculateLinePrice(input: PriceInput): PriceBreakdown {
   const basePrice = input.basePrice;
   const modifiersTotal = input.modifiersTotal ?? 0;
   const discountAmount = input.discountAmount ?? 0;
-  const taxRate = input.taxRate ?? 0;
-
   const taxableAmount = Math.max(
     0,
     basePrice + modifiersTotal - discountAmount,
   );
-  const taxAmount = roundMoney(taxableAmount * taxRate);
-  const finalPrice = roundMoney(taxableAmount + taxAmount);
+  // The menu price already includes IVA. The comanda charges that price.
+  const taxAmount = 0;
+  const finalPrice = roundMoney(taxableAmount);
 
   return {
     basePrice,

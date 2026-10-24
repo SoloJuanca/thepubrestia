@@ -16,11 +16,6 @@ export default async function SettingsPage() {
     orderBy: { createdAt: "asc" },
   });
 
-  const taxRate = await prisma.menuItem.aggregate({
-    where: { locationId: location?.id, active: true },
-    _avg: { taxRate: true },
-  });
-
   return (
     <div className="space-y-6">
       <div>
@@ -51,10 +46,8 @@ export default async function SettingsPage() {
             {location?.timezone ?? "—"}
           </p>
           <p>
-            <span className="text-muted-foreground">IVA promedio menú: </span>
-            {taxRate._avg.taxRate != null
-              ? `${(Number(taxRate._avg.taxRate) * 100).toFixed(1)}%`
-              : "—"}
+            <span className="text-muted-foreground">Precios: </span>
+            ya incluyen IVA
           </p>
         </CardContent>
       </Card>

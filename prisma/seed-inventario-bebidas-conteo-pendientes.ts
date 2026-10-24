@@ -113,7 +113,7 @@ async function ensureDrinkSku(params: {
           name: params.menuName,
           sku: params.sku,
           price: params.price,
-          taxRate: 0.16,
+          taxRate: 0,
           available: true,
           active: true,
           requiresPrep: false,

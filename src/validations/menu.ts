@@ -52,7 +52,7 @@ export const createMenuItemSchema = z.object({
   sku: z.union([z.string().max(40), z.literal(""), z.null()]).optional(),
   price: z.coerce.number().min(0),
   estimatedCost: z.coerce.number().min(0).optional().nullable(),
-  taxRate: z.coerce.number().min(0).max(1).default(0.16),
+  taxRate: z.coerce.number().min(0).max(1).default(0),
   imageUrl: optionalUrl,
   imagePath: z.string().optional().nullable(),
   available: z.boolean().default(true),

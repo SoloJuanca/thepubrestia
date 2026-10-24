@@ -28,7 +28,7 @@ import {
 import { PaymentSheet } from "@/features/payments/components/PaymentSheet";
 import { SplitBillDrawer } from "@/features/pos/components/SplitBillDrawer";
 import { useLiveRefresh } from "@/features/pos/hooks/useLiveRefresh";
-import { displayCheckName } from "@/lib/pos-labels";
+import { displayCheckName, hasAmountDue } from "@/lib/pos-labels";
 
 export type PosCategory = { id: string; name: string };
 
@@ -144,9 +144,24 @@ export function TableSessionView({ session }: Props) {
     });
   }, [session.menuItems, categoryId, search]);
 
+  const owesMoney = hasAmountDue(session.checks);
+  const canCloseSession = session.checks.length > 0 && !owesMoney;
   const takeout = session.mode === "takeout";
   const backHref = session.backHref ?? (takeout ? "/takeout" : "/pos");
   const backLabel = session.backLabel ?? (takeout ? "← Para llevar" : "← Mesas");
+
+  function closeSession() {
+    startTransition(async () => {
+      const result = await endTableSessionAction({
+        orderId: session.orderId,
+      });
+      if (!result.ok) toast.error(result.error);
+      else {
+        toast.success(takeout ? "Pedido cerrado" : "Mesa cerrada");
+        router.push(backHref);
+      }
+    });
+  }
 
   function seatLabel(id: string | null) {
     if (!id) return takeout ? "Pedido" : "Toda la mesa";
@@ -199,6 +214,16 @@ export function TableSessionView({ session }: Props) {
       const result = await markItemDeliveredAction({ orderItemId });
       if (!result.ok) toast.error(result.error);
       else toast.success("Entregado");
+    });
+  }
+
+  function removeLine(item: PosCheck["items"][number]) {
+    if (item.status !== "OPEN") return;
+    if (!window.confirm(`¿Quitar ${item.nameSnapshot} de la comanda?`)) return;
+    startTransition(async () => {
+      const result = await removeOrderItemAction({ orderItemId: item.id });
+      if (!result.ok) toast.error(result.error);
+      else toast.success("Producto quitado.");
     });
   }
 
@@ -381,54 +406,21 @@ export function TableSessionView({ session }: Props) {
                     Cocina: {item.notes}
                   </p>
                 ) : null}
-                {activeCheck.status === "OPEN" ? (
-                  <div className="mt-2 flex gap-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        startTransition(async () => {
-                          const result = await updateItemQtyAction({
-                            orderItemId: item.id,
-                            quantity: Math.max(1, item.quantity - 1),
-                          });
-                          if (!result.ok) toast.error(result.error);
-                        })
-                      }
-                    >
-                      −
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        startTransition(async () => {
-                          const result = await updateItemQtyAction({
-                            orderItemId: item.id,
-                            quantity: item.quantity + 1,
-                          });
-                          if (!result.ok) toast.error(result.error);
-                        })
-                      }
-                    >
-                      +
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        startTransition(async () => {
-                          const result = await removeOrderItemAction({
-                            orderItemId: item.id,
-                          });
-                          if (!result.ok) toast.error(result.error);
-                        })
-                      }
-                    >
-                      Quitar
-                    </Button>
-                  </div>
-                ) : null}
+                <ItemLineControls
+                  item={item}
+                  checkOpen={activeCheck.status === "OPEN"}
+                  pending={pending}
+                  onQty={(quantity) =>
+                    startTransition(async () => {
+                      const result = await updateItemQtyAction({
+                        orderItemId: item.id,
+                        quantity,
+                      });
+                      if (!result.ok) toast.error(result.error);
+                    })
+                  }
+                  onRemove={() => removeLine(item)}
+                />
               </div>
             ))
           ) : (
@@ -503,31 +495,21 @@ export function TableSessionView({ session }: Props) {
                     >
                       Pagar
                     </Button>
-                  ) : (
+                  ) : c.status === "CLOSED" ? (
                     <Badge variant="secondary">Pagada</Badge>
+                  ) : (
+                    <Badge variant="outline">Sin cobro</Badge>
                   )}
                 </div>
               ))}
             </div>
           ) : null}
 
-          {closedCount === session.checks.length &&
-          session.checks.length > 0 ? (
+          {canCloseSession ? (
             <Button
               className="min-h-12 w-full"
               disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  const result = await endTableSessionAction({
-                    orderId: session.orderId,
-                  });
-                  if (!result.ok) toast.error(result.error);
-                  else {
-                    toast.success(takeout ? "Pedido cerrado" : "Mesa cerrada");
-                    router.push(backHref);
-                  }
-                })
-              }
+              onClick={closeSession}
             >
               {takeout ? "Cerrar pedido" : "Cerrar mesa"}
             </Button>
@@ -576,6 +558,15 @@ export function TableSessionView({ session }: Props) {
                 Cobrar
               </Button>
             </>
+          ) : canCloseSession ? (
+            <Button
+              type="button"
+              className="min-h-12 flex-1"
+              disabled={pending}
+              onClick={closeSession}
+            >
+              {takeout ? "Cerrar pedido" : "Cerrar mesa"}
+            </Button>
           ) : null}
         </div>
       </div>
@@ -632,6 +623,21 @@ export function TableSessionView({ session }: Props) {
                       Cocina: {item.notes}
                     </p>
                   ) : null}
+                  <ItemLineControls
+                    item={item}
+                    checkOpen={activeCheck?.status === "OPEN"}
+                    pending={pending}
+                    onQty={(quantity) =>
+                      startTransition(async () => {
+                        const result = await updateItemQtyAction({
+                          orderItemId: item.id,
+                          quantity,
+                        });
+                        if (!result.ok) toast.error(result.error);
+                      })
+                    }
+                    onRemove={() => removeLine(item)}
+                  />
                 </div>
               ))
             ) : (
@@ -671,6 +677,14 @@ export function TableSessionView({ session }: Props) {
                   Pagar ${activeCheck.total}
                 </Button>
               </>
+            ) : canCloseSession ? (
+              <Button
+                className="min-h-12 w-full"
+                disabled={pending}
+                onClick={closeSession}
+              >
+                {takeout ? "Cerrar pedido" : "Cerrar mesa"}
+              </Button>
             ) : null}
           </div>
         </SheetContent>
@@ -850,6 +864,53 @@ function ItemKitchenNote({
         }
       }}
     />
+  );
+}
+
+function ItemLineControls({
+  item,
+  checkOpen,
+  pending,
+  onQty,
+  onRemove,
+}: {
+  item: { status: string; quantity: number };
+  checkOpen: boolean;
+  pending: boolean;
+  onQty: (quantity: number) => void;
+  onRemove: () => void;
+}) {
+  if (!checkOpen || item.status !== "OPEN") return null;
+  return (
+    <div className="mt-2 flex gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        className="min-h-10 min-w-10"
+        disabled={pending}
+        onClick={() => onQty(Math.max(1, item.quantity - 1))}
+      >
+        −
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="min-h-10 min-w-10"
+        disabled={pending}
+        onClick={() => onQty(item.quantity + 1)}
+      >
+        +
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="min-h-10 flex-1"
+        disabled={pending}
+        onClick={onRemove}
+      >
+        Quitar
+      </Button>
+    </div>
   );
 }
 

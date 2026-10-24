@@ -301,7 +301,7 @@ async function main() {
             available: true,
             active: true,
             requiresPrep: drink.requiresPrep,
-            taxRate: 0.16,
+            taxRate: 0,
           },
         })
       : await prisma.menuItem.create({
@@ -311,7 +311,7 @@ async function main() {
             name: drink.menuName,
             sku: drink.sku,
             price: drink.price,
-            taxRate: 0.16,
+            taxRate: 0,
             available: true,
             active: true,
             requiresPrep: drink.requiresPrep,

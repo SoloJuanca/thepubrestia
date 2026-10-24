@@ -223,7 +223,9 @@ export function TicketView({ ticket }: Props) {
 
         <MoneyRow label="Subtotal" value={`$${ticket.subtotal}`} />
         <MoneyRow label="Descuentos" value={`-$${ticket.discountTotal}`} />
-        <MoneyRow label="Impuestos" value={`$${ticket.taxTotal}`} />
+        {Number(ticket.taxTotal) > 0 ? (
+          <MoneyRow label="Impuestos" value={`$${ticket.taxTotal}`} />
+        ) : null}
         <MoneyRow label="TOTAL" value={`$${ticket.total}`} bold />
 
         <div

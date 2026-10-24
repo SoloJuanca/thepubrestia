@@ -93,58 +93,10 @@ export class PaymentService {
         );
       }
 
-      const items = await tx.orderItem.findMany({
-        where: {
-          checkId: params.checkId,
-          status: { not: "CANCELLED" },
-          menuItemId: { not: null },
-        },
-        include: {
-          menuItem: {
-            include: { recipeItems: true },
-          },
-        },
+      await consumeCheckSales(tx, {
+        checkId: params.checkId,
+        employeeId: params.paidById,
       });
-
-      for (const item of items) {
-        if (!item.menuItem) continue;
-
-        const already = await tx.inventoryMovement.findFirst({
-          where: {
-            referenceType: "ORDER",
-            referenceId: item.id,
-            movementType: "SALE_CONSUMPTION",
-          },
-        });
-        if (already) continue;
-
-        for (const recipe of item.menuItem.recipeItems) {
-          const qty = toNum(recipe.quantity) * item.quantity;
-          if (qty <= 0) continue;
-          try {
-            await inventoryService.applyStockChange(
-              {
-                ingredientId: recipe.ingredientId,
-                quantityDelta: -qty,
-                movementType: "SALE_CONSUMPTION",
-                referenceType: "ORDER",
-                referenceId: item.id,
-                employeeId: params.paidById,
-                notes: `Venta ${item.nameSnapshot} x${item.quantity}`,
-              },
-              tx,
-            );
-          } catch (error) {
-            // Soft-fail insufficient stock on close: still record intended consumption
-            // by allowing negative? Plan says never negative. Block close instead.
-            throw new Error(
-              error instanceof Error
-                ? `Inventario: ${error.message}`
-                : "Stock insuficiente para cerrar la cuenta.",
-            );
-          }
-        }
-      }
 
       const order = await tx.order.findUniqueOrThrow({
         where: { id: checkRow.orderId },
@@ -210,3 +162,60 @@ export class PaymentService {
 }
 
 export const paymentService = new PaymentService();
+
+/** Deducts recipe stock for the items on a check. Safe to call once per item. */
+export async function consumeCheckSales(
+  tx: Prisma.TransactionClient,
+  params: { checkId: string; employeeId?: string | null },
+) {
+  const items = await tx.orderItem.findMany({
+    where: {
+      checkId: params.checkId,
+      status: { not: "CANCELLED" },
+      menuItemId: { not: null },
+    },
+    include: {
+      menuItem: {
+        include: { recipeItems: true },
+      },
+    },
+  });
+
+  for (const item of items) {
+    if (!item.menuItem) continue;
+
+    const already = await tx.inventoryMovement.findFirst({
+      where: {
+        referenceType: "ORDER",
+        referenceId: item.id,
+        movementType: "SALE_CONSUMPTION",
+      },
+    });
+    if (already) continue;
+
+    for (const recipe of item.menuItem.recipeItems) {
+      const qty = toNum(recipe.quantity) * item.quantity;
+      if (qty <= 0) continue;
+      try {
+        await inventoryService.applyStockChange(
+          {
+            ingredientId: recipe.ingredientId,
+            quantityDelta: -qty,
+            movementType: "SALE_CONSUMPTION",
+            referenceType: "ORDER",
+            referenceId: item.id,
+            employeeId: params.employeeId,
+            notes: `Venta ${item.nameSnapshot} x${item.quantity}`,
+          },
+          tx,
+        );
+      } catch (error) {
+        throw new Error(
+          error instanceof Error
+            ? `Inventario: ${error.message}`
+            : "Stock insuficiente para cerrar la cuenta.",
+        );
+      }
+    }
+  }
+}

@@ -380,7 +380,7 @@ async function main() {
         sku: data.sku,
         price: data.price,
         estimatedCost: data.estimatedCost,
-        taxRate: 0.16,
+        taxRate: 0,
         available: true,
         active: true,
         requiresPrep: data.requiresPrep ?? true,

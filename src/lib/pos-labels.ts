@@ -31,6 +31,16 @@ export function assertPaymentsCoverTotal(total: number, paid: number) {
   }
 }
 
+/** True when an open check still has money to collect. */
+export function hasAmountDue(
+  checks: Array<{ status: string; total?: number | string }>,
+): boolean {
+  return checks.some((check) => {
+    if (check.status === "CLOSED" || check.status === "CANCELLED") return false;
+    return roundMoney(Number(check.total ?? 0)) > 0;
+  });
+}
+
 /** Table can close only when every non-cancelled check is CLOSED. */
 export function assertAllChecksPaid(
   checks: Array<{ status: string }>,

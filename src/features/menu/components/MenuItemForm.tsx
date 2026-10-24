@@ -83,7 +83,7 @@ export function MenuItemForm({
     sku: initial?.sku ?? "",
     price: initial?.price ?? "",
     estimatedCost: initial?.estimatedCost ?? "",
-    taxRate: initial?.taxRate ?? "0.16",
+    taxRate: "0",
     imageUrl: initial?.imageUrl ?? "",
     imagePath: initial?.imagePath ?? null,
     available: initial?.available ?? true,
@@ -156,7 +156,7 @@ export function MenuItemForm({
             {mode === "create" ? "Nuevo producto" : "Editar producto"}
           </CardTitle>
           <CardDescription>
-            Precio, impuestos, disponibilidad y modificadores.
+            Precio, disponibilidad y modificadores. El precio ya incluye IVA.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -229,18 +229,6 @@ export function MenuItemForm({
               onChange={(e) =>
                 setForm({ ...form, estimatedCost: e.target.value })
               }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="item-tax">Impuesto (ej. 0.16)</Label>
-            <Input
-              id="item-tax"
-              type="number"
-              min={0}
-              max={1}
-              step="0.01"
-              value={form.taxRate}
-              onChange={(e) => setForm({ ...form, taxRate: e.target.value })}
             />
           </div>
           <div className="space-y-2">
