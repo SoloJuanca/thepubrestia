@@ -88,7 +88,7 @@ export const MENU_ALIMENTOS: {
               name: "Salsa",
               required: true,
               min_selections: 1,
-              max_selections: 1,
+              max_selections: 2,
               options: [
                 { name: "Buffalo", price_modifier: 0 },
                 { name: "BBQ", price_modifier: 0 },
@@ -198,7 +198,7 @@ export const MENU_ALIMENTOS: {
               name: "Salsa",
               required: true,
               min_selections: 1,
-              max_selections: 1,
+              max_selections: 2,
               options: [
                 { name: "Buffalo", price_modifier: 0 },
                 { name: "BBQ", price_modifier: 0 },
@@ -245,7 +245,7 @@ export const MENU_ALIMENTOS: {
               name: "Salsa Boneless",
               required: true,
               min_selections: 1,
-              max_selections: 1,
+              max_selections: 2,
               options: [
                 { name: "Buffalo", price_modifier: 0 },
                 { name: "BBQ", price_modifier: 0 },
@@ -400,7 +400,7 @@ export const MENU_ALIMENTOS: {
               name: "Preparación",
               required: true,
               min_selections: 1,
-              max_selections: 1,
+              max_selections: 2,
               options: [
                 { name: "Queso", price_modifier: 0 },
                 { name: "Jamón con queso", price_modifier: 0 },

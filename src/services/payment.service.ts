@@ -210,10 +210,10 @@ export async function consumeCheckSales(
           tx,
         );
       } catch (error) {
-        throw new Error(
-          error instanceof Error
-            ? `Inventario: ${error.message}`
-            : "Stock insuficiente para cerrar la cuenta.",
+        // Cobro no debe fallar por inventario (stock bajo, insumo inactivo, etc.).
+        console.error(
+          `[inventory] No se descontó ${item.nameSnapshot} (${recipe.ingredientId}):`,
+          error instanceof Error ? error.message : error,
         );
       }
     }

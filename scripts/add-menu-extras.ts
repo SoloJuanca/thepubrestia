@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 applyMenuExtras(prisma)
   .then((result) => {
     console.log(
-      `Listo · productos=${result.items} con aderezo=${result.sauces} quesadillas=${result.tortillas}`,
+      `Listo · productos=${result.items} con aderezo=${result.sauces} quesadillas=${result.tortillas} mitad-mitad=${result.halfAndHalf}`,
     );
   })
   .catch((error) => {

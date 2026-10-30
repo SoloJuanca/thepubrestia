@@ -773,6 +773,9 @@ export function TableSessionView({ session }: Props) {
                   <Label>
                     {group.name}
                     {group.required ? " *" : ""}
+                    {group.maxSelections > 1
+                      ? ` · hasta ${group.maxSelections}${group.maxSelections === 2 ? " (mitad y mitad)" : ""}`
+                      : ""}
                   </Label>
                   <div className="flex flex-wrap gap-2">
                     {group.options.map((opt) => {

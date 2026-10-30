@@ -325,6 +325,11 @@ export function OrderMenu({ categories }: { categories: PublicCategory[] }) {
                       {group.name}
                       <span className="ml-1 font-normal text-muted-foreground">
                         {group.required ? "· obligatorio" : "· opcional"}
+                        {group.maxSelections > 1
+                          ? group.maxSelections === 2
+                            ? " · hasta 2 (mitad y mitad)"
+                            : ` · hasta ${group.maxSelections}`
+                          : ""}
                       </span>
                     </legend>
                     <div className="flex flex-wrap gap-2">

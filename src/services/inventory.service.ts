@@ -95,7 +95,8 @@ export class InventoryService {
       if (!ingredient) {
         throw new Error("Ingrediente no encontrado.");
       }
-      if (!ingredient.active) {
+      // Sales can still deduct inactive ingredients so closing a check is never blocked.
+      if (!ingredient.active && input.movementType !== "SALE_CONSUMPTION") {
         throw new Error("El ingrediente está inactivo.");
       }
 
@@ -105,12 +106,8 @@ export class InventoryService {
         throw new Error("La cantidad del movimiento no puede ser 0.");
       }
 
+      // Allow negative stock so sales/closes are never blocked by inventory.
       const resultingStock = roundQty(previousStock + delta);
-      if (resultingStock < 0) {
-        throw new Error(
-          `Stock insuficiente. Actual: ${previousStock}, solicitado: ${Math.abs(delta)}.`,
-        );
-      }
 
       let nextAverageCost = toNumber(ingredient.averageCost);
       if (

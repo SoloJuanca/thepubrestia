@@ -101,6 +101,37 @@ async function upsertGroup(
   return "updated" as const;
 }
 
+const HALF_HALF_GROUPS = [
+  /^salsa$/i,
+  /^salsa boneless$/i,
+  /^preparaci[oó]n$/i,
+];
+
+/** Allow 1 or 2 picks so kitchen can do mitad y mitad. */
+async function enableHalfAndHalf(
+  prisma: PrismaClient,
+  menuItemId: string,
+) {
+  const groups = await prisma.modifierGroup.findMany({
+    where: { menuItemId },
+  });
+  let updated = 0;
+  for (const group of groups) {
+    if (!HALF_HALF_GROUPS.some((pattern) => pattern.test(group.name))) continue;
+    if (group.maxSelections >= 2 && group.minSelections >= 1) continue;
+    await prisma.modifierGroup.update({
+      where: { id: group.id },
+      data: {
+        required: true,
+        minSelections: Math.max(1, group.minSelections),
+        maxSelections: Math.max(2, group.maxSelections),
+      },
+    });
+    updated += 1;
+  }
+  return updated;
+}
+
 /** Extra sauce on savory dishes, and flour/corn tortilla on quesadillas. */
 export async function applyMenuExtras(prisma: PrismaClient, locationId?: string) {
   const items = await prisma.menuItem.findMany({
@@ -110,6 +141,7 @@ export async function applyMenuExtras(prisma: PrismaClient, locationId?: string)
 
   let sauces = 0;
   let tortillas = 0;
+  let halfAndHalf = 0;
 
   for (const item of items) {
     const context = `${item.category.name} ${item.category.description ?? ""} ${item.tags.join(" ")} ${item.name}`;
@@ -139,7 +171,12 @@ export async function applyMenuExtras(prisma: PrismaClient, locationId?: string)
       });
       tortillas += 1;
     }
+
+    // Boneless (incl. hamburguesa/sampler) y quesadillas: 1 o 2 sabores.
+    if (/boneless|quesadilla|sampler/i.test(item.name)) {
+      halfAndHalf += await enableHalfAndHalf(prisma, item.id);
+    }
   }
 
-  return { items: items.length, sauces, tortillas };
+  return { items: items.length, sauces, tortillas, halfAndHalf };
 }
